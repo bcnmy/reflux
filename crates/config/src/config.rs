@@ -238,10 +238,10 @@ pub struct BucketConfig {
     // Whether the bucket should only index routes that support smart contracts or just EOAs
     pub is_smart_contract_deposit_supported: bool,
     // Lower bound of the token amount to be transferred from the source chain to the destination chain
-    #[validate(minimum = 1)]
+    #[validate(minimum = 1.0)]
     pub token_amount_from_usd: f64,
     // Upper bound of the token amount to be transferred from the source chain to the destination chain
-    #[validate(minimum = 1)]
+    #[validate(minimum = 1.0)]
     pub token_amount_to_usd: f64,
 }
 
