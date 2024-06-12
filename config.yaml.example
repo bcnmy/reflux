@@ -44,8 +44,12 @@ covalent:
     api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
+    api_key: 'my-api'
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
+server:
+    port: 8080
+    host: 'localhost'
 is_indexer: true

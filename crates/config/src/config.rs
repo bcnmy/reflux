@@ -24,6 +24,8 @@ pub struct Config {
     pub covalent: CovalentConfig,
     // Infra Dependencies
     pub infra: InfraConfig,
+    // API Server Configuration
+    pub server: ServerConfig,
     // Whether to run the routes indexer + algorithm on this node.
     pub is_indexer: bool,
 }
@@ -121,6 +123,7 @@ impl Config {
             bungee: raw_config.bungee,
             coingecko: raw_config.coingecko,
             infra: raw_config.infra,
+            server: raw_config.server,
             is_indexer: raw_config.is_indexer,
         })
     }
@@ -218,6 +221,7 @@ pub struct RawConfig {
     pub coingecko: CoinGeckoConfig,
     pub covalent: CovalentConfig,
     pub infra: InfraConfig,
+    pub server: ServerConfig,
     pub is_indexer: bool,
 }
 
@@ -318,6 +322,10 @@ pub struct CoinGeckoConfig {
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
+
+    // API key to access the CoinGecko API
+    #[validate(min_length = 1)]
+    pub api_key: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -344,6 +352,17 @@ pub struct InfraConfig {
     // The URL of the MongoDB
     #[validate(pattern = r"mongodb://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
     pub mongo_url: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ServerConfig {
+    // The port the server will listen on
+    #[validate(minimum = 1)]
+    pub port: u16,
+
+    // The host the server will listen on
+    #[validate(min_length = 1)]
+    pub host: String,
 }
 
 #[cfg(test)]
@@ -399,10 +418,14 @@ covalent:
     api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
+    api_key: 'my-api'
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
+server:
+    port: 8080
+    host: 'localhost'
 is_indexer: true
         "#;
         let config = Config::from_yaml_str(&config).unwrap();
@@ -458,6 +481,9 @@ is_indexer: true
 
         assert_eq!(config.covalent.base_url, "https://api.bungee.exchange");
         assert_eq!(config.coingecko.base_url, "https://api.coingecko.com");
+        assert_eq!(config.bungee.api_key, "my-api");
+        assert_eq!(config.covalent.api_key, "my-api");
+        assert_eq!(config.coingecko.api_key, "my-api");
         assert_eq!(config.infra.redis_url, "redis://localhost:6379");
         assert_eq!(config.infra.rabbitmq_url, "amqp://localhost:5672");
         assert_eq!(config.infra.mongo_url, "mongodb://localhost:27017");
@@ -484,16 +510,23 @@ covalent:
     api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
+    api_key: 'my-api'
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
+server:
+    port: 8080
+    host: 'localhost'
 is_indexer: true
         "#;
 
         assert_eq!(
-            if let ConfigError::SerdeError(_) = Config::from_yaml_str(&config).unwrap_err() {
-                true
+            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+                let err = err.as_validation_errors().unwrap().to_string();
+                let expected_err = "{\"errors\":[],\"properties\":{\"chains\":{\"errors\":[\"The items must be unique.\"]}}}";
+
+                err == expected_err
             } else {
                 false
             },
@@ -537,20 +570,32 @@ covalent:
     api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
+    api_key: 'my-api'
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
+server:
+    port: 8080
+    host: 'localhost'
 is_indexer: true
         "#;
 
         assert_eq!(
-            if let ConfigError::SerdeError(_) = Config::from_yaml_str(&config).unwrap_err() {
-                true
+            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+                let err = err.as_validation_errors().unwrap().to_string();
+                let expected_err = "{\"errors\":[],\"properties\":{\"tokens\":{\"errors\":[\"The items must be unique.\"]}}}";
+
+                err == expected_err
             } else {
                 false
             },
             true
         );
+    }
+
+    #[test]
+    fn test_sample_config_should_be_valid() {
+        assert_eq!(Config::from_file("../../config.yaml.example").is_ok(), true);
     }
 }
