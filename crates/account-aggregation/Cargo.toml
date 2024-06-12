@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+mongodb = "2.8.2"
+reqwest = { version = "0.12.4", features = ["json"] }
+tokio = "1.38.0"
+serde = { version = "1.0.203", features = ["derive"] }
+futures = "0.3.30"
+log = "0.4.21"
+
+# workspace dependencies
+storage = { workspace = true }
