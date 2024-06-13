@@ -1,3 +1,4 @@
+use derive_more::Display;
 use mongodb::bson::{doc, Document};
 use reqwest::Client as ReqwestClient;
 use std::error::Error;
@@ -9,7 +10,12 @@ use uuid::Uuid;
 
 pub mod types;
 
-#[derive(Clone)]
+#[derive(Clone, Display, Debug)]
+#[display(
+    "AccountAggregationService {{ user_db_provider: {:?}, account_mapping_db_provider: {:?} }}",
+    user_db_provider,
+    account_mapping_db_provider
+)]
 pub struct AccountAggregationService {
     pub user_db_provider: Arc<MongoDBProvider>,
     pub account_mapping_db_provider: Arc<MongoDBProvider>,

@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct AddressQuery {
     address: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct RegisterAccount {
     address: String,
     account_type: String,
@@ -18,7 +18,7 @@ pub struct RegisterAccount {
     is_enabled: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct AddAccount {
     user_id: String,
     new_account: String,
@@ -27,7 +27,7 @@ pub struct AddAccount {
     is_enabled: bool,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PathQuery {
     user_id: String,
     to_chain: u32,

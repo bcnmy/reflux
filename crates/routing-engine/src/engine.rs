@@ -1,11 +1,20 @@
 use crate::route_fee_bucket::RouteFeeBucket;
 use account_aggregation::types::Balance;
 use account_aggregation::AccountAggregationService;
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Display, PartialEq, Clone)]
+#[display(
+    "Route: from_chain: {}, to_chain: {}, token: {}, amount: {}, path: {:?}",
+    from_chain,
+    to_chain,
+    token,
+    amount,
+    path
+)]
 pub struct Route {
     pub from_chain: u32,
     pub to_chain: u32,
@@ -31,7 +40,7 @@ pub struct RoutingEngine {
     aas_client: AccountAggregationService,
     // db_provider: Arc<dyn DBProvider + Send + Sync>,
     // settlement_engine: SettlementEngineClient,
-    cache: Arc<HashMap<String, (f64, f64, String)>>, // (key, (fee, quote, bridge_name))
+    _cache: Arc<HashMap<String, (f64, f64, String)>>, // (key, (fee, quote, bridge_name))
     route_fee_bucket: RouteFeeBucket,
 }
 
@@ -39,7 +48,7 @@ impl RoutingEngine {
     pub fn new(aas_client: AccountAggregationService) -> Self {
         let cache = Arc::new(HashMap::new());
         let route_fee_bucket = RouteFeeBucket::new();
-        Self { aas_client, cache, route_fee_bucket }
+        Self { aas_client, _cache: cache, route_fee_bucket }
     }
 
     /// Get the best cost path for a user
@@ -89,8 +98,11 @@ impl RoutingEngine {
         let mut total_amount_needed = to_value;
         let mut selected_assets: Vec<Route> = Vec::new();
 
-        for (balance, fee, quote, bridge_name) in sorted_assets {
-            println!("total_amount_needed: {}, balance.amount: {}, fee: {}", total_amount_needed, balance.amount, fee);
+        for (balance, fee, _quote, bridge_name) in sorted_assets {
+            println!(
+                "total_amount_needed: {}, balance.amount: {}, fee: {}",
+                total_amount_needed, balance.amount, fee
+            );
             if total_amount_needed <= 0.0 {
                 break;
             }
@@ -166,19 +178,5 @@ impl RoutingEngine {
     async fn get_user_balance_from_agg_service(&self, user_id: &str) -> Vec<Balance> {
         // Note: aas should always return vec of balances
         self.aas_client.get_user_accounts_balance(&user_id.to_string()).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn test_get_user_balance_from_agg_service_wrong_user() {
-        // let aas_client = AccountAggregationService::new();
-        // let routing_engine = RoutingEngine::new(aas_client);
-        // let user_id = "user1";
-        // let balances = routing_engine.get_user_balance_from_agg_service(user_id).await;
-        // println!("Balances: {:?}", balances);
-
-        // assert_eq!(balances.len(), 0);
     }
 }

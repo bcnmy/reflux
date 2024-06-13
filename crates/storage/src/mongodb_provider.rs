@@ -1,5 +1,6 @@
 use crate::db_provider::DBProvider;
 use async_trait::async_trait;
+use derive_more::Display;
 use mongodb::{
     bson::{self, doc, Document},
     options::IndexOptions,
@@ -8,7 +9,13 @@ use mongodb::{
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-#[derive(Clone)]
+#[derive(Debug, Display, Clone)]
+#[display(
+    "MongoDBProvider {{ client: {:?}, db_name: {}, collection_name: {} }}",
+    client,
+    db_name,
+    collection_name
+)]
 pub struct MongoDBProvider {
     pub client: Client,
     db_name: String,

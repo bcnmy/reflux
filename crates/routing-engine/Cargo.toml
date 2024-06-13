@@ -5,7 +5,12 @@ edition = "2021"
 
 [dependencies]
 serde = "1.0.203"
+async-trait = "0.1.80"
 tokio = { version = "1.38.0", features = ["full"] }
 
 # workspace dependencies
 account-aggregation = { workspace = true }
+derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
+
+[dev-dependencies]
+mockall = "0.12.1"
