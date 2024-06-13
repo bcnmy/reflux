@@ -8,7 +8,9 @@ pub struct LinearRegressionEstimator {
     intercept: f64,
 }
 
-impl<'de> Estimator<'de, f64, f64, linreg::Error> for LinearRegressionEstimator {
+impl<'de> Estimator<'de, f64, f64> for LinearRegressionEstimator {
+    type Error = linreg::Error;
+
     fn build(data: Vec<DataPoint<f64, f64>>) -> Result<Self, linreg::Error> {
         let (x, y): (Vec<f64>, Vec<f64>) =
             data.into_iter().map(|DataPoint { x, y }| (x, y)).unzip();

@@ -15,13 +15,14 @@ use crate::source::{Calldata, RouteSource};
 
 mod types;
 
+#[derive(Debug)]
 pub struct BungeeClient {
     client: reqwest::Client,
     base_url: String,
 }
 
 impl BungeeClient {
-    fn new(
+    pub(crate) fn new(
         config::BungeeConfig { base_url, api_key }: &config::BungeeConfig,
     ) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
@@ -74,7 +75,7 @@ impl RouteSource for BungeeClient {
         &self,
         route: &Route<'_>,
         from_token_amount: U256,
-        estimation_type: CostType,
+        estimation_type: &CostType,
     ) -> Result<f64, Self::FetchRouteCostError> {
         // Build GetQuoteRequest
         let from_token = route.from_token.by_chain.get(&route.from_chain.id);
@@ -105,6 +106,7 @@ impl RouteSource for BungeeClient {
             user_address: ADDRESS_ZERO.to_string(),
             recipient: ADDRESS_ZERO.to_string(),
             unique_routes_per_bridge: false,
+            is_contract_call: route.is_smart_contract_deposit,
         };
 
         // Get quote
@@ -227,6 +229,7 @@ is_indexer: true
                 from_amount: "100000000".to_string(),
                 user_address: "0x0000000000000000000000000000000000000000".to_string(),
                 recipient: "0x0000000000000000000000000000000000000000".to_string(),
+                is_contract_call: false,
                 unique_routes_per_bridge: false,
             })
             .await
@@ -245,9 +248,10 @@ is_indexer: true
             to_chain: &config.chains.get(&42161).unwrap(),
             from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
             to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
+            is_smart_contract_deposit: false,
         };
         let least_route_cost = client
-            .fetch_least_route_cost_in_usd(&route, Uint::from(100000000), CostType::Fee)
+            .fetch_least_route_cost_in_usd(&route, Uint::from(100000000), &CostType::Fee)
             .await
             .unwrap();
 

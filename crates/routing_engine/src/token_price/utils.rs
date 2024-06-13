@@ -8,7 +8,7 @@ use ruint::Uint;
 use crate::config;
 use crate::token_price::TokenPriceProvider;
 
-async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
+pub async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
     config: &'a config::Config,
     token_price_provider: &'a T,
     token_symbol: &'a String,
@@ -38,7 +38,7 @@ async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
 }
 
 #[derive(Debug, Display, From)]
-enum Errors<'a, T: Display> {
+pub(crate) enum Errors<'a, T: Display> {
     #[display(fmt = "Token price provider error: {}", _0)]
     TokenPriceProviderError(T),
 
@@ -97,6 +97,7 @@ is_indexer: true
         .unwrap()
     }
 
+    #[derive(Debug)]
     struct TokenPriceProviderStub;
 
     impl TokenPriceProvider for TokenPriceProviderStub {

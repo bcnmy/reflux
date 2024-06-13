@@ -6,12 +6,14 @@ pub mod linear_regression_estimator;
 
 #[derive(Debug)]
 pub struct DataPoint<Input, Output> {
-    x: Input,
-    y: Output,
+    pub(crate) x: Input,
+    pub(crate) y: Output,
 }
 
-pub trait Estimator<'de, Input, Output, Error>: Serialize + Deserialize<'de> {
-    fn build(data: Vec<DataPoint<Input, Output>>) -> Result<Self, Error>;
+pub trait Estimator<'de, Input, Output>: Serialize + Deserialize<'de> {
+    type Error;
+
+    fn build(data: Vec<DataPoint<Input, Output>>) -> Result<Self, Self::Error>;
 
     fn estimate(&self, x: Input) -> Output;
 }

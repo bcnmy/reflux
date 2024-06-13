@@ -1,9 +1,9 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
-mod utils;
+pub mod utils;
 
-pub trait TokenPriceProvider {
-    type Error: Display;
+pub trait TokenPriceProvider: Debug {
+    type Error: Display + Debug;
 
     async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error>;
 }

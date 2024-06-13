@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
@@ -171,7 +171,11 @@ impl ValidateUniqueItems for Buckets {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
         self.0
             .iter()
-            .map(|b| (b.from_chain_id, b.to_chain_id))
+            .map(|b| {
+                let mut s = DefaultHasher::new();
+                b.hash(&mut s);
+                s.finish()
+            })
             .collect::<Vec<_>>()
             .validate_unique_items()
     }

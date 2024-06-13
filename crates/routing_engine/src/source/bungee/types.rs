@@ -18,6 +18,7 @@ pub struct GetQuoteRequest {
     pub from_amount: String,
     pub user_address: String,
     pub recipient: String,
+    pub is_contract_call: bool,
     pub unique_routes_per_bridge: bool,
 }
 
