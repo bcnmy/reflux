@@ -16,3 +16,4 @@ log = "0.4.21"
 account-aggregation = { workspace = true }
 storage = { workspace = true }
 config = { workspace = true }
+routing-engine = { workspace = true }

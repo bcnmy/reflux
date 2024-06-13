@@ -1,6 +1,7 @@
 use account_aggregation::AccountAggregationService;
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
-use serde::Deserialize;
+use routing_engine::engine::RoutingEngine;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -26,27 +27,40 @@ pub struct AddAccount {
     is_enabled: bool,
 }
 
-pub struct ServiceController<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> {
-    account_service: Arc<AccountAggregationService<T>>,
+#[derive(Deserialize, Serialize)]
+pub struct PathQuery {
+    user_id: String,
+    to_chain: u32,
+    to_token: String,
+    to_value: f64,
 }
 
-impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> ServiceController<T> {
-    pub fn new(account_service: AccountAggregationService<T>) -> Self {
-        Self { account_service: Arc::new(account_service) }
+pub struct ServiceController {
+    account_service: Arc<AccountAggregationService>,
+    routing_engine: Arc<RoutingEngine>,
+}
+
+impl ServiceController {
+    pub fn new(account_service: AccountAggregationService, routing_engine: RoutingEngine) -> Self {
+        Self {
+            account_service: Arc::new(account_service),
+            routing_engine: Arc::new(routing_engine),
+        }
     }
 
     pub fn router(self) -> Router {
         let account_service = self.account_service.clone();
+        let routing_engine = self.routing_engine.clone();
 
         Router::new()
-            .route("/", get(ServiceController::<T>::status))
-            .route("/api/health", get(ServiceController::<T>::status))
+            .route("/", get(ServiceController::status))
+            .route("/api/health", get(ServiceController::status))
             .route(
                 "/api/account",
                 get({
                     let account_service = account_service.clone();
                     move |Query(query): Query<AddressQuery>| async move {
-                        ServiceController::<T>::get_account(account_service.clone(), query).await
+                        ServiceController::get_account(account_service.clone(), query).await
                     }
                 }),
             )
@@ -55,11 +69,8 @@ impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> Servic
                 axum::routing::post({
                     let account_service = account_service.clone();
                     move |Json(payload): Json<RegisterAccount>| async move {
-                        ServiceController::<T>::register_user_account(
-                            account_service.clone(),
-                            payload,
-                        )
-                        .await
+                        ServiceController::register_user_account(account_service.clone(), payload)
+                            .await
                     }
                 }),
             )
@@ -68,7 +79,18 @@ impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> Servic
                 axum::routing::post({
                     let account_service = account_service.clone();
                     move |Json(payload): Json<AddAccount>| async move {
-                        ServiceController::<T>::add_account(account_service.clone(), payload).await
+                        ServiceController::add_account(account_service.clone(), payload).await
+                    }
+                }),
+            )
+            .route(
+                "/api/get_best_path",
+                get({
+                    move |Query(query): Query<PathQuery>| {
+                        let future = async move {
+                            ServiceController::get_best_path(routing_engine.clone(), query).await
+                        };
+                        future
                     }
                 }),
             )
@@ -86,24 +108,25 @@ impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> Servic
 
     /// Get user accounts
     pub async fn get_account(
-        account_service: Arc<AccountAggregationService<T>>,
+        account_service: Arc<AccountAggregationService>,
         query: AddressQuery,
     ) -> impl IntoResponse {
-        match account_service.get_user_accounts(&query.address).await {
-            Ok(accounts) => {
-                let response = json!({ "accounts": accounts });
-                (StatusCode::OK, Json(response))
+        let user_id = account_service.get_user_id(&query.address).await;
+
+        let response = match user_id {
+            Some(user_id) => {
+                let accounts = account_service.get_user_accounts(&user_id).await;
+                json!({ "user_id": user_id, "accounts": accounts })
             }
-            Err(err) => {
-                let response = json!({ "error": err.to_string() });
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
-            }
-        }
+            None => json!({ "error": "User not found" }),
+        };
+
+        (StatusCode::OK, Json(response))
     }
 
     /// Register user account
     pub async fn register_user_account(
-        account_service: Arc<AccountAggregationService<T>>,
+        account_service: Arc<AccountAggregationService>,
         payload: RegisterAccount,
     ) -> impl IntoResponse {
         match account_service
@@ -128,7 +151,7 @@ impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> Servic
 
     /// Add account to user
     pub async fn add_account(
-        account_service: Arc<AccountAggregationService<T>>,
+        account_service: Arc<AccountAggregationService>,
         payload: AddAccount,
     ) -> impl IntoResponse {
         match account_service
@@ -150,5 +173,23 @@ impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> Servic
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
             }
         }
+    }
+
+    /// Get best cost path for asset consolidation
+    pub async fn get_best_path(
+        routing_engine: Arc<RoutingEngine>,
+        query: PathQuery,
+    ) -> impl IntoResponse {
+        let routes = routing_engine
+            .get_best_cost_path(
+                &query.user_id,
+                query.to_chain,
+                &query.to_token,
+                query.to_value,
+            )
+            .await;
+        let response = json!({ "routes": routes });
+
+        (StatusCode::OK, Json(response))
     }
 }

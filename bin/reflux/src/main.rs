@@ -3,6 +3,7 @@ use api::service_controller::ServiceController;
 use axum::http::Method;
 use config::Config;
 use log::info;
+use routing_engine::engine::RoutingEngine;
 use storage::mongodb_provider::MongoDBProvider;
 use tokio;
 use tokio::signal;
@@ -43,8 +44,11 @@ async fn main() {
         covalent_api_key,
     );
 
+    // Initialize routing engine
+    let routing_engine = RoutingEngine::new(account_service.clone());
+
     // API service controller
-    let service_controller = ServiceController::new(account_service);
+    let service_controller = ServiceController::new(account_service, routing_engine);
 
     let cors = CorsLayer::new().allow_origin(Any).allow_methods([
         Method::GET,

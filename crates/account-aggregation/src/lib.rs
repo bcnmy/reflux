@@ -1,25 +1,27 @@
-use crate::types::{ApiResponse, Balance};
 use mongodb::bson::{doc, Document};
-use reqwest::{Client as ReqwestClient, Response};
+use reqwest::Client as ReqwestClient;
 use std::error::Error;
 use std::sync::Arc;
 use storage::db_provider::DBProvider;
+use storage::mongodb_provider::MongoDBProvider;
+use types::{ApiResponse, Balance};
 use uuid::Uuid;
 
-mod types;
+pub mod types;
 
 #[derive(Clone)]
-pub struct AccountAggregationService<T: DBProvider + Send + Sync + Clone + 'static> {
-    pub user_db_provider: Arc<T>,
-    pub account_mapping_db_provider: Arc<T>,
+pub struct AccountAggregationService {
+    pub user_db_provider: Arc<MongoDBProvider>,
+    pub account_mapping_db_provider: Arc<MongoDBProvider>,
     covalent_base_url: String,
     covalent_api_key: String,
 }
 
-impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T> {
+impl AccountAggregationService {
+    /// Create a new AccountAggregationService
     pub fn new(
-        user_db_provider: T,
-        account_mapping_db_provider: T,
+        user_db_provider: MongoDBProvider,
+        account_mapping_db_provider: MongoDBProvider,
         base_url: String,
         api_key: String,
     ) -> Self {
@@ -31,7 +33,9 @@ impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T>
         }
     }
 
+    /// Get the user_id associated with an address
     pub async fn get_user_id(&self, address: &String) -> Option<String> {
+        let address = address.to_lowercase();
         let query = doc! { "account": address };
         if let Ok(Some(user_mapping)) =
             self.account_mapping_db_provider.read::<Document>(&query).await
@@ -43,21 +47,23 @@ impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T>
         None
     }
 
-    pub async fn get_user_accounts(&self, address: &String) -> Result<Vec<String>, Box<dyn Error>> {
-        if let Some(user_id) = self.get_user_id(address).await {
-            let query = doc! { "user_id": &user_id };
-            if let Ok(Some(user)) = self.user_db_provider.read::<Document>(&query).await {
-                if let Some(accounts) = user.get_array("accounts").ok() {
-                    return Ok(accounts
-                        .iter()
-                        .filter_map(|acc| acc.as_str().map(String::from))
-                        .collect());
-                }
+    /// Get the accounts associated with a user_id
+    pub async fn get_user_accounts(&self, user_id: &String) -> Option<Vec<String>> {
+        let query = doc! { "user_id": user_id };
+        if let Ok(Some(user)) = self.user_db_provider.read::<Document>(&query).await {
+            if let Some(accounts) = user.get_array("accounts").ok() {
+                let accounts: Vec<String> = accounts
+                    .iter()
+                    .filter_map(|account| account.as_str().map(|s| s.to_string()))
+                    .collect();
+                return Some(accounts);
             }
         }
-        Ok(vec![address.clone()])
+        None
     }
 
+    /// Register a new user account
+    /// todo: update the schema here, need chainId?
     pub async fn register_user_account(
         &self,
         address: String,
@@ -65,6 +71,8 @@ impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T>
         chain_id: String,
         is_enabled: bool,
     ) -> Result<(), Box<dyn Error>> {
+        let address = address.to_lowercase();
+
         if self.get_user_id(&address).await.is_none() {
             let user_id = Uuid::new_v4().to_string();
             let user_doc = doc! {
@@ -85,6 +93,8 @@ impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T>
         Ok(())
     }
 
+    /// Add an account to a user_id
+    /// todo: same as above
     pub async fn add_account(
         &self,
         user_id: String,
@@ -108,51 +118,47 @@ impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T>
         Ok(())
     }
 
-    pub async fn get_user_accounts_balance(&self, users: Vec<String>) -> Vec<Balance> {
+    /// Get the balance of a user's accounts
+    pub async fn get_user_accounts_balance(&self, user_id: &String) -> Vec<Balance> {
+        // find the users accounts from the user_id
+        let query = doc! { "user_id": user_id };
+        let user = self.user_db_provider.read::<Document>(&query).await.unwrap().unwrap();
+        let accounts = user.get_array("accounts").unwrap();
+        let users: Vec<String> =
+            accounts.iter().filter_map(|account| account.as_str().map(|s| s.to_string())).collect();
+
         let mut balances = Vec::new();
         let client = Arc::new(ReqwestClient::new());
         let networks = [
-            "eth-mainnet",
+            // "eth-mainnet",
             "matic-mainnet",
-            "base-mainnet",
-            "blast-mainnet",
+            // "base-mainnet",
+            // "blast-mainnet",
             "arbitrum-mainnet",
             "optimism-mainnet",
         ];
+        println!("{:?}", users);
 
-        let fetches: Vec<_> = networks
-            .iter()
-            .flat_map(|network| {
-                let client = &client;
-                users.iter().map(move |user| {
-                    let url = format!(
-                        "{}/{}/address/{}/balances_v2/?key={}&no-spam=true&nft=false",
-                        self.covalent_base_url, network, user, self.covalent_api_key
-                    );
-                    async move {
-                        let res: Response =
-                            client.get(&url).send().await.map_err(Box::<dyn Error>::from)?;
-                        let api_response: ApiResponse =
-                            res.json().await.map_err(Box::<dyn Error>::from)?;
-                        extract_balance_data(api_response)
-                    }
-                })
-            })
-            .collect();
-
-        let results = futures::future::join_all(fetches).await;
-
-        for result in results {
-            match result {
-                Ok(data) => balances.extend(data),
-                Err(e) => eprintln!("Error fetching data: {}", e),
+        // todo: parallelize this
+        for network in networks.iter() {
+            for user in users.iter() {
+                let url = format!(
+                    "{}/v1/{}/address/{}/balances_v2/?key={}",
+                    self.covalent_base_url, network, user, self.covalent_api_key
+                );
+                let response = client.get(&url).send().await.unwrap();
+                let api_response: ApiResponse = response.json().await.unwrap();
+                let user_balances = extract_balance_data(api_response).unwrap();
+                balances.extend(user_balances);
             }
         }
+
         balances
     }
 }
 
-fn extract_balance_data(api_response: ApiResponse) -> Result<Vec<Balance>, Box<dyn Error>> {
+/// Extract balance data from the API response
+fn extract_balance_data(api_response: ApiResponse) -> Option<Vec<Balance>> {
     let chain_id = api_response.data.chain_id.to_string();
     let results = api_response
         .data
@@ -185,5 +191,5 @@ fn extract_balance_data(api_response: ApiResponse) -> Result<Vec<Balance>, Box<d
         })
         .collect();
 
-    Ok(results)
+    Some(results)
 }
