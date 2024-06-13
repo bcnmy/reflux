@@ -3,7 +3,7 @@ use num_bigint::BigUint;
 pub use bungee::BungeeClient;
 use config;
 
-use crate::{EstimationType, Route};
+use crate::{CostType, Route};
 
 mod bungee;
 
@@ -13,11 +13,11 @@ trait RouteSource {
     type FetchRouteCostError;
     type GenerateRouteCalldataError;
 
-    async fn fetch_route_cost_in_usd(
+    async fn fetch_least_route_cost_in_usd(
         &self,
         route: &Route,
         from_token_amount: BigUint,
-        estimation_type: EstimationType,
+        estimation_type: CostType,
     ) -> Result<f64, Self::FetchRouteCostError>;
 
     async fn generate_route_calldata(

@@ -11,3 +11,7 @@ linreg = "0.2.0"
 num-bigint = "0.4.5"
 reqwest = "0.12.4"
 derive_more = "0.99.17"
+tokio = { version = "1.38.0", features = ["macros"] }
+
+[dev-dependencies]
+dotenv = "0.15.0"

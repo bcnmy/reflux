@@ -1,10 +1,10 @@
 [workspace]
 
 members = [
-	"crates/config",
-	"crates/routing-engine",
-	"crates/api",
-	"crates/storage",
-	"crates/account-aggregation",
-	"bin/reflux"
+    "crates/config",
+    "crates/routing-engine",
+    "crates/api",
+    "crates/storage",
+    "crates/account-aggregation",
+    "bin/reflux"
 ]

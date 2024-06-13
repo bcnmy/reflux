@@ -5,13 +5,13 @@ use derive_more::{Display, From};
 use num_bigint::BigUint;
 use reqwest;
 use reqwest::header;
-use serde::de::StdError;
 use serde::{Deserialize, Serialize};
+use serde::de::StdError;
 
 use types::*;
 
+use crate::{CostType, Route};
 use crate::source::{Calldata, RouteSource};
-use crate::{EstimationType, Route};
 
 mod types;
 
@@ -63,18 +63,18 @@ pub enum BungeeFetchRouteCostError {
     NoValidRouteError(),
 
     #[display(fmt = "The estimation type {} is not implemented", _0)]
-    EstimationTypeNotImplementedError(EstimationType),
+    EstimationTypeNotImplementedError(CostType),
 }
 
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
     type GenerateRouteCalldataError = ();
 
-    async fn fetch_route_cost_in_usd(
+    async fn fetch_least_route_cost_in_usd(
         &self,
         route: &Route<'_>,
         from_token_amount: BigUint,
-        estimation_type: EstimationType,
+        estimation_type: CostType,
     ) -> Result<f64, Self::FetchRouteCostError> {
         // Build GetQuoteRequest
         let from_token = route.from_token.by_chain.get(&route.from_chain.id);
@@ -119,7 +119,7 @@ impl RouteSource for BungeeClient {
             .routes
             .iter()
             .map(|route| match estimation_type {
-                EstimationType::Cheapest => Some(
+                CostType::Fee => Some(
                     route.total_gas_fees_in_usd + route.output_value_in_usd?
                         - route.input_value_in_usd?,
                 ),
@@ -141,5 +141,68 @@ impl RouteSource for BungeeClient {
         route: &Route<'_>,
     ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use num_bigint::BigUint;
+
+    use config::Config;
+
+    use crate::{CostType, Route};
+    use crate::source::{BungeeClient, RouteSource};
+    use crate::source::bungee::types::GetQuoteRequest;
+
+    fn setup() -> (Config, BungeeClient) {
+        let config = config::Config::from_file("../../config.yaml").unwrap();
+        let bungee_client = BungeeClient::new(&config.bungee).unwrap();
+        return (config, bungee_client);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_quote() {
+        let (_, client) = setup();
+
+        let response = client
+            .get_quote(GetQuoteRequest {
+                from_chain_id: 1,
+                from_token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48".to_string(),
+                to_chain_id: 42161,
+                to_token_address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831".to_string(),
+                from_amount: "100000000".to_string(),
+                user_address: "0x0000000000000000000000000000000000000000".to_string(),
+                recipient: "0x0000000000000000000000000000000000000000".to_string(),
+                unique_routes_per_bridge: false,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(response.success, true);
+        assert_eq!(response.result.routes.len() > 0, true);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_least_cost_route() {
+        let (config, client) = setup();
+
+        let route = Route {
+            from_chain: &config.chains.get(&1).unwrap(),
+            to_chain: &config.chains.get(&42161).unwrap(),
+            from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
+            to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
+        };
+        let least_route_cost = client
+            .fetch_least_route_cost_in_usd(
+                &route,
+                BigUint::from_str("100000000").unwrap(),
+                CostType::Fee,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(least_route_cost > 0.0, true);
     }
 }

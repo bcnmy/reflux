@@ -7,9 +7,9 @@ pub mod indexer;
 mod source;
 
 #[derive(Debug, Display)]
-enum EstimationType {
-    Cheapest,
-    Fastest,
+enum CostType {
+    Fee,
+    BridgingTime,
 }
 
 pub struct Route<'a> {
