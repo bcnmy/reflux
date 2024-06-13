@@ -1,9 +1,9 @@
 use mongodb::{bson::doc, Client};
 use serde::{Deserialize, Serialize};
+use serial_test::serial;
 use std::error::Error;
 use tokio;
 use uuid::Uuid;
-use serial_test::serial;
 
 use crate::{db_provider::DBProvider, mongodb_provider::MongoDBProvider};
 
@@ -19,9 +19,15 @@ const DB_NAME: &str = "test_db";
 const COLLECTION_NAME: &str = "test_collection";
 
 // Helper function to setup the MongoDBProvider
-async fn setup_db_provider() -> Result<MongoDBProvider, Box<dyn Error>> {
+async fn setup_db_provider(create_indexes: bool) -> Result<MongoDBProvider, Box<dyn Error>> {
     let client = Client::with_uri_str(DB_URI).await?;
-    let db_provider = MongoDBProvider::new(client, DB_NAME.to_string(), COLLECTION_NAME.to_string()).await?;
+    let db_provider = MongoDBProvider::new(
+        client,
+        DB_NAME.to_string(),
+        COLLECTION_NAME.to_string(),
+        create_indexes,
+    )
+    .await?;
     Ok(db_provider)
 }
 
@@ -34,14 +40,14 @@ async fn teardown() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 #[serial]
 async fn able_to_create_db_provider() -> Result<(), Box<dyn Error>> {
-    let _ = setup_db_provider().await?;
+    let _ = setup_db_provider(true).await?;
     Ok(())
 }
 
 #[tokio::test]
 #[serial]
 async fn test_create_and_read() -> Result<(), Box<dyn Error>> {
-    let db_provider = setup_db_provider().await?;
+    let db_provider = setup_db_provider(true).await?;
 
     let user_id = Uuid::new_v4().to_string();
     let user = TestUser { user_id: user_id.clone(), name: "Alice".to_string() };
@@ -60,7 +66,7 @@ async fn test_create_and_read() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 #[serial]
 async fn test_unique_user_id() -> Result<(), Box<dyn Error>> {
-    let db_provider = setup_db_provider().await?;
+    let db_provider = setup_db_provider(true).await?;
 
     let user_id = Uuid::new_v4().to_string();
     let user1 = TestUser { user_id: user_id.clone(), name: "Alice".to_string() };
@@ -82,7 +88,7 @@ async fn test_unique_user_id() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 #[serial]
 async fn test_update() -> Result<(), Box<dyn Error>> {
-    let db_provider = setup_db_provider().await?;
+    let db_provider = setup_db_provider(true).await?;
 
     let user_id = Uuid::new_v4().to_string();
     let user = TestUser { user_id: user_id.clone(), name: "Alice".to_string() };
@@ -105,7 +111,7 @@ async fn test_update() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 #[serial]
 async fn test_delete() -> Result<(), Box<dyn Error>> {
-    let db_provider = setup_db_provider().await?;
+    let db_provider = setup_db_provider(true).await?;
 
     let user_id = Uuid::new_v4().to_string();
     let user = TestUser { user_id: user_id.clone(), name: "Alice".to_string() };

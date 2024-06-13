@@ -9,22 +9,33 @@ use uuid::Uuid;
 mod types;
 
 #[derive(Clone)]
-pub struct AccountAggregationService<T: DBProvider + Send + Sync> {
-    pub storage: Arc<T>,
+pub struct AccountAggregationService<T: DBProvider + Send + Sync + Clone + 'static> {
+    pub user_db_provider: Arc<T>,
+    pub account_mapping_db_provider: Arc<T>,
     covalent_base_url: String,
     covalent_api_key: String,
 }
 
-impl<T: DBProvider + Send + Sync> AccountAggregationService<T> {
-    /// Creates a new [`AccountAggregationService`].
-    pub fn new(storage: T, base_url: String, api_key: String) -> Self {
-        Self { storage: Arc::new(storage), covalent_base_url: base_url, covalent_api_key: api_key }
+impl<T: DBProvider + Send + Sync + Clone + 'static> AccountAggregationService<T> {
+    pub fn new(
+        user_db_provider: T,
+        account_mapping_db_provider: T,
+        base_url: String,
+        api_key: String,
+    ) -> Self {
+        Self {
+            user_db_provider: Arc::new(user_db_provider),
+            account_mapping_db_provider: Arc::new(account_mapping_db_provider),
+            covalent_base_url: base_url,
+            covalent_api_key: api_key,
+        }
     }
 
-    /// Get user ID from an account address.
     pub async fn get_user_id(&self, address: &String) -> Option<String> {
         let query = doc! { "account": address };
-        if let Ok(Some(user_mapping)) = self.storage.read::<Document>(&query).await {
+        if let Ok(Some(user_mapping)) =
+            self.account_mapping_db_provider.read::<Document>(&query).await
+        {
             if let Some(user_id) = user_mapping.get_str("user_id").ok() {
                 return Some(user_id.to_string());
             }
@@ -32,21 +43,28 @@ impl<T: DBProvider + Send + Sync> AccountAggregationService<T> {
         None
     }
 
-    /// Get user accounts by address.
-    pub async fn get_user_accounts(&self, address: &String) -> Vec<String> {
+    pub async fn get_user_accounts(&self, address: &String) -> Result<Vec<String>, Box<dyn Error>> {
         if let Some(user_id) = self.get_user_id(address).await {
             let query = doc! { "user_id": &user_id };
-            if let Ok(Some(user)) = self.storage.read::<Document>(&query).await {
+            if let Ok(Some(user)) = self.user_db_provider.read::<Document>(&query).await {
                 if let Some(accounts) = user.get_array("accounts").ok() {
-                    return accounts.iter().filter_map(|acc| acc.as_str().map(String::from)).collect();
+                    return Ok(accounts
+                        .iter()
+                        .filter_map(|acc| acc.as_str().map(String::from))
+                        .collect());
                 }
             }
         }
-        vec![address.clone()]
+        Ok(vec![address.clone()])
     }
 
-    /// Register user account, creating a new user ID if necessary.
-    pub async fn register_user_account(&self, address: String, account_type: String, chain_id: String, is_enabled: bool) -> Result<(), Box<dyn Error>> {
+    pub async fn register_user_account(
+        &self,
+        address: String,
+        account_type: String,
+        chain_id: String,
+        is_enabled: bool,
+    ) -> Result<(), Box<dyn Error>> {
         if self.get_user_id(&address).await.is_none() {
             let user_id = Uuid::new_v4().to_string();
             let user_doc = doc! {
@@ -56,31 +74,37 @@ impl<T: DBProvider + Send + Sync> AccountAggregationService<T> {
                 "chain_id": chain_id,
                 "is_enabled": is_enabled
             };
-            self.storage.create(&user_doc).await?;
+            self.user_db_provider.create(&user_doc).await?;
 
             let mapping_doc = doc! {
                 "account": &address,
                 "user_id": user_id
             };
-            self.storage.create(&mapping_doc).await?;
+            self.account_mapping_db_provider.create(&mapping_doc).await?;
         }
         Ok(())
     }
 
-    /// Add a new account to an existing user ID.
-    pub async fn add_account(&self, user_id: String, new_account: String, account_type: String, chain_id: String, is_enabled: bool) -> Result<(), Box<dyn Error>> {
+    pub async fn add_account(
+        &self,
+        user_id: String,
+        new_account: String,
+        account_type: String,
+        chain_id: String,
+        is_enabled: bool,
+    ) -> Result<(), Box<dyn Error>> {
         let query = doc! { "user_id": &user_id };
         let update = doc! {
             "$addToSet": { "accounts": new_account.clone() },
             "$set": { "type": account_type, "chain_id": chain_id, "is_enabled": is_enabled }
         };
-        self.storage.update(&query, &update).await?;
+        self.user_db_provider.update(&query, &update).await?;
 
         let mapping_doc = doc! {
             "account": new_account,
             "user_id": user_id
         };
-        self.storage.create(&mapping_doc).await?;
+        self.account_mapping_db_provider.create(&mapping_doc).await?;
         Ok(())
     }
 
@@ -96,23 +120,26 @@ impl<T: DBProvider + Send + Sync> AccountAggregationService<T> {
             "optimism-mainnet",
         ];
 
-        // collect all futures for all users & networks
-        let fetches: Vec<_> = networks.iter().flat_map(|network| {
-            let client = &client;
-            users.iter().map(move |user| {
-                let url = format!(
-                    "{}/{}/address/{}/balances_v2/?key={}&no-spam=true&nft=false",
-                    self.covalent_base_url, network, user, self.covalent_api_key
-                );
-                async move {
-                    let res: Response = client.get(&url).send().await.map_err(Box::<dyn Error>::from)?;
-                    let api_response: ApiResponse = res.json().await.map_err(Box::<dyn Error>::from)?;
-                    extract_balance_data(api_response)
-                }
+        let fetches: Vec<_> = networks
+            .iter()
+            .flat_map(|network| {
+                let client = &client;
+                users.iter().map(move |user| {
+                    let url = format!(
+                        "{}/{}/address/{}/balances_v2/?key={}&no-spam=true&nft=false",
+                        self.covalent_base_url, network, user, self.covalent_api_key
+                    );
+                    async move {
+                        let res: Response =
+                            client.get(&url).send().await.map_err(Box::<dyn Error>::from)?;
+                        let api_response: ApiResponse =
+                            res.json().await.map_err(Box::<dyn Error>::from)?;
+                        extract_balance_data(api_response)
+                    }
+                })
             })
-        }).collect();
+            .collect();
 
-        // wait for all futures to complete
         let results = futures::future::join_all(fetches).await;
 
         for result in results {

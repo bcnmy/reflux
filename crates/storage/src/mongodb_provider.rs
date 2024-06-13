@@ -20,9 +20,12 @@ impl MongoDBProvider {
         client: Client,
         db_name: String,
         collection_name: String,
+        create_indexes: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let provider = Self { client, db_name, collection_name };
-        provider.create_indexes().await?;
+        if create_indexes {
+            provider.create_indexes().await?;
+        }
         Ok(provider)
     }
 

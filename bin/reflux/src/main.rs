@@ -1,4 +1,5 @@
-use api::service_controller;
+use account_aggregation::AccountAggregationService;
+use api::service_controller::ServiceController;
 use axum::http::Method;
 use config::Config;
 use log::info;
@@ -9,16 +10,41 @@ use tower_http::cors::{Any, CorsLayer};
 
 #[tokio::main]
 async fn main() {
+    // Load configuration from yaml
     let config = Config::from_file("config.yaml").expect("Failed to load config file");
-
     let mongodb_uri = config.infra.mongo_url;
     let (app_host, app_port) = (config.server.host, config.server.port);
-    // create mongodb client
+
+    // Create mongodb client
     let client =
         mongodb::Client::with_uri_str(&mongodb_uri).await.expect("Failed to create mongodb client");
-    let db_provider = MongoDBProvider::new(client, "reflux".to_string(), "accounts".to_string())
-        .await
-        .expect("Failed to create MongoDB provider");
+
+    // Instance of MongoDBProvider for users and account mappings
+    let user_db_provider =
+        MongoDBProvider::new(client.clone(), "reflux".to_string(), "users".to_string(), true)
+            .await
+            .expect("Failed to create MongoDB provider for users");
+    let account_mapping_db_provider = MongoDBProvider::new(
+        client.clone(),
+        "reflux".to_string(),
+        "account_mappings".to_string(),
+        false,
+    )
+    .await
+    .expect("Failed to create MongoDB provider for account mappings");
+
+    let (covalent_base_url, covalent_api_key) = (config.covalent.base_url, config.covalent.api_key);
+
+    // Initialize account aggregation service for api
+    let account_service = AccountAggregationService::new(
+        user_db_provider.clone(),
+        account_mapping_db_provider.clone(),
+        covalent_base_url,
+        covalent_api_key,
+    );
+
+    // API service controller
+    let service_controller = ServiceController::new(account_service);
 
     let cors = CorsLayer::new().allow_origin(Any).allow_methods([
         Method::GET,
@@ -26,7 +52,7 @@ async fn main() {
         Method::PATCH,
     ]);
 
-    let app = service_controller::router(db_provider.clone()).layer(cors);
+    let app = service_controller.router().layer(cors);
 
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", app_host, app_port))
         .await

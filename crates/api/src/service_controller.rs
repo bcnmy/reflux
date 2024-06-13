@@ -3,7 +3,6 @@ use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::ge
 use serde::Deserialize;
 use serde_json::json;
 use std::sync::Arc;
-use storage::db_provider::DBProvider;
 
 #[derive(Deserialize)]
 pub struct AddressQuery {
@@ -27,128 +26,129 @@ pub struct AddAccount {
     is_enabled: bool,
 }
 
-pub fn router<T: DBProvider + Send + Sync + Clone + 'static>(db_provider: T) -> Router {
-    let db_provider = Arc::new(db_provider);
-    Router::new()
-        .route("/", get(status))
-        .route("/api/health", get(status))
-        .route(
-            "/api/account",
-            get({
-                let db_provider = db_provider.clone();
-                move |Query(query): Query<AddressQuery>| async move {
-                    get_account(db_provider.clone(), query).await
-                }
-            }),
-        )
-        .route(
-            "/api/register_account",
-            axum::routing::post({
-                let db_provider = db_provider.clone();
-                move |Json(payload): Json<RegisterAccount>| async move {
-                    register_user_account(db_provider.clone(), payload).await
-                }
-            }),
-        )
-        .route(
-            "/api/add_account",
-            axum::routing::post({
-                let db_provider = db_provider.clone();
-                move |Json(payload): Json<AddAccount>| async move {
-                    add_account(db_provider.clone(), payload).await
-                }
-            }),
-        )
+pub struct ServiceController<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> {
+    account_service: Arc<AccountAggregationService<T>>,
 }
 
-pub async fn status() -> impl IntoResponse {
-    println!("Service is running...");
-    let response = json!({
-        "message": "Service is running...",
-        "status": "ok"
-    });
-    (StatusCode::OK, Json(response))
-}
+impl<T: storage::db_provider::DBProvider + Send + Sync + Clone + 'static> ServiceController<T> {
+    pub fn new(account_service: AccountAggregationService<T>) -> Self {
+        Self { account_service: Arc::new(account_service) }
+    }
 
-pub async fn get_account<T: DBProvider + Send + Sync + Clone + 'static>(
-    db_provider: Arc<T>,
-    query: AddressQuery,
-) -> impl IntoResponse {
-    let account_service = AccountAggregationService::new(
-        (*db_provider).clone(),
-        "base_url".to_string(),
-        "api_key".to_string(),
-    );
-    // match account_service.get_user_accounts(&query.address).await {
-    //     Ok(accounts) => {
-    //         let response = json!({ "accounts": accounts });
-    //         (StatusCode::OK, Json(response))
-    //     }
-    //     Err(err) => {
-    //         let response = json!({ "error": err.to_string() });
-    //         (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
-    //     }
-    // }
-    let accounts = account_service.get_user_accounts(&query.address).await;
-    let response = json!({ "accounts": accounts });
-    (StatusCode::OK, Json(response))
-}
+    pub fn router(self) -> Router {
+        let account_service = self.account_service.clone();
 
-pub async fn register_user_account<T: DBProvider + Send + Sync + Clone + 'static>(
-    db_provider: Arc<T>,
-    payload: RegisterAccount,
-) -> impl IntoResponse {
-    let account_service = AccountAggregationService::new(
-        (*db_provider).clone(),
-        "base_url".to_string(),
-        "api_key".to_string(),
-    );
-    match account_service
-        .register_user_account(
-            payload.address,
-            payload.account_type,
-            payload.chain_id,
-            payload.is_enabled,
-        )
-        .await
-    {
-        Ok(_) => {
-            let response = json!({ "message": "User account registered successfully" });
-            (StatusCode::OK, Json(response))
-        }
-        Err(err) => {
-            let response = json!({ "error": err.to_string() });
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+        Router::new()
+            .route("/", get(ServiceController::<T>::status))
+            .route("/api/health", get(ServiceController::<T>::status))
+            .route(
+                "/api/account",
+                get({
+                    let account_service = account_service.clone();
+                    move |Query(query): Query<AddressQuery>| async move {
+                        ServiceController::<T>::get_account(account_service.clone(), query).await
+                    }
+                }),
+            )
+            .route(
+                "/api/register_account",
+                axum::routing::post({
+                    let account_service = account_service.clone();
+                    move |Json(payload): Json<RegisterAccount>| async move {
+                        ServiceController::<T>::register_user_account(
+                            account_service.clone(),
+                            payload,
+                        )
+                        .await
+                    }
+                }),
+            )
+            .route(
+                "/api/add_account",
+                axum::routing::post({
+                    let account_service = account_service.clone();
+                    move |Json(payload): Json<AddAccount>| async move {
+                        ServiceController::<T>::add_account(account_service.clone(), payload).await
+                    }
+                }),
+            )
+    }
+
+    /// Health check endpoint
+    pub async fn status() -> impl IntoResponse {
+        println!("Service is running...");
+        let response = json!({
+            "message": "Service is running...",
+            "status": "ok"
+        });
+        (StatusCode::OK, Json(response))
+    }
+
+    /// Get user accounts
+    pub async fn get_account(
+        account_service: Arc<AccountAggregationService<T>>,
+        query: AddressQuery,
+    ) -> impl IntoResponse {
+        match account_service.get_user_accounts(&query.address).await {
+            Ok(accounts) => {
+                let response = json!({ "accounts": accounts });
+                (StatusCode::OK, Json(response))
+            }
+            Err(err) => {
+                let response = json!({ "error": err.to_string() });
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+            }
         }
     }
-}
 
-pub async fn add_account<T: DBProvider + Send + Sync + Clone + 'static>(
-    db_provider: Arc<T>,
-    payload: AddAccount,
-) -> impl IntoResponse {
-    let account_service = AccountAggregationService::new(
-        (*db_provider).clone(),
-        "base_url".to_string(),
-        "api_key".to_string(),
-    );
-    match account_service
-        .add_account(
-            payload.user_id,
-            payload.new_account,
-            payload.account_type,
-            payload.chain_id,
-            payload.is_enabled,
-        )
-        .await
-    {
-        Ok(_) => {
-            let response = json!({ "message": "Account added successfully" });
-            (StatusCode::OK, Json(response))
+    /// Register user account
+    pub async fn register_user_account(
+        account_service: Arc<AccountAggregationService<T>>,
+        payload: RegisterAccount,
+    ) -> impl IntoResponse {
+        match account_service
+            .register_user_account(
+                payload.address,
+                payload.account_type,
+                payload.chain_id,
+                payload.is_enabled,
+            )
+            .await
+        {
+            Ok(_) => {
+                let response = json!({ "message": "User account registered successfully" });
+                (StatusCode::OK, Json(response))
+            }
+            Err(err) => {
+                let response = json!({ "error": err.to_string() });
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+            }
         }
-        Err(err) => {
-            let response = json!({ "error": err.to_string() });
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+    }
+
+    /// Add account to user
+    pub async fn add_account(
+        account_service: Arc<AccountAggregationService<T>>,
+        payload: AddAccount,
+    ) -> impl IntoResponse {
+        match account_service
+            .add_account(
+                payload.user_id,
+                payload.new_account,
+                payload.account_type,
+                payload.chain_id,
+                payload.is_enabled,
+            )
+            .await
+        {
+            Ok(_) => {
+                let response = json!({ "message": "Account added successfully" });
+                (StatusCode::OK, Json(response))
+            }
+            Err(err) => {
+                let response = json!({ "error": err.to_string() });
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+            }
         }
     }
 }
