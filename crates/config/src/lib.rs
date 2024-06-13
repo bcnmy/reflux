@@ -1,4 +1,3 @@
-pub use config::Config;
+pub use config::*;
 
 pub mod config;
-
