@@ -146,6 +146,8 @@ impl RouteSource for BungeeClient {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use ruint::Uint;
 
     use config::Config;
@@ -155,7 +157,59 @@ mod tests {
     use crate::source::bungee::types::GetQuoteRequest;
 
     fn setup() -> (Config, BungeeClient) {
-        let config = config::Config::from_file("../../config.yaml").unwrap();
+        // let config = config::Config::from_file("../../config.yaml").unwrap();
+        let mut config = config::Config::from_yaml_str(
+            r#"
+chains:
+  - id: 1
+    name: Ethereum
+    is_enabled: true
+  - id: 42161
+    name: Arbitrum
+    is_enabled: true
+tokens:
+  - symbol: USDC
+    is_enabled: true
+    by_chain:
+      1:
+        is_enabled: true
+        decimals: 6
+        address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+      42161:
+        is_enabled: true
+        decimals: 6
+        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+buckets:
+  - from_chain_id: 1
+    to_chain_id: 42161
+    from_token: USDC
+    to_token: USDC
+    is_smart_contract_deposit_supported: false
+    token_amount_from_usd: 1
+    token_amount_to_usd: 10
+bungee:
+  base_url: https://api.socket.tech/v2
+  api_key: <REDACTED>
+covalent:
+  base_url: 'https://api.bungee.exchange'
+  api_key: 'my-api'
+coingecko:
+  base_url: 'https://api.coingecko.com'
+  api_key: 'my-api'
+infra:
+  redis_url: 'redis://localhost:6379'
+  rabbitmq_url: 'amqp://localhost:5672'
+  mongo_url: 'mongodb://localhost:27017'
+server:
+  port: 8080
+  host: 'localhost'
+is_indexer: true
+        "#,
+        )
+        .unwrap();
+
+        config.bungee.api_key = env::var("BUNGEE_API_KEY").unwrap();
+
         let bungee_client = BungeeClient::new(&config.bungee).unwrap();
         return (config, bungee_client);
     }
