@@ -10,7 +10,7 @@ pub struct DataPoint<Input, Output> {
     y: Output,
 }
 
-trait Estimator<'de, Input, Output, Error>: Serialize + Deserialize<'de> {
+pub trait Estimator<'de, Input, Output, Error>: Serialize + Deserialize<'de> {
     fn build(data: Vec<DataPoint<Input, Output>>) -> Result<Self, Error>;
 
     fn estimate(&self, x: Input) -> Output;

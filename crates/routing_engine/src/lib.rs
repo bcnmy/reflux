@@ -5,6 +5,7 @@ use config;
 pub mod estimator;
 pub mod indexer;
 mod source;
+mod token_price;
 
 #[derive(Debug, Display)]
 enum CostType {

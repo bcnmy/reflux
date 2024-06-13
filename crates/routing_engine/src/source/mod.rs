@@ -9,7 +9,7 @@ mod bungee;
 
 type Calldata = String;
 
-trait RouteSource {
+pub(crate) trait RouteSource {
     type FetchRouteCostError;
     type GenerateRouteCalldataError;
 

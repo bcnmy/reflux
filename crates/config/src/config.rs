@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -247,6 +248,23 @@ pub struct BucketConfig {
     // Upper bound of the token amount to be transferred from the source chain to the destination chain
     #[validate(minimum = 1.0)]
     pub token_amount_to_usd: f64,
+}
+
+// Implementation for treating a BucketConfig as a key in a k-v pair
+impl Hash for BucketConfig {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        const PRECISION: u32 = 5;
+
+        self.from_chain_id.hash(state);
+        self.to_chain_id.hash(state);
+        self.from_token.hash(state);
+        self.to_token.hash(state);
+        self.is_smart_contract_deposit_supported.hash(state);
+
+        // We limit the precision of amounts to <PRECISION> decimal places
+        ((self.token_amount_from_usd * 10_f64.powi(PRECISION as i32)) as i64).hash(state);
+        ((self.token_amount_to_usd * 10_f64.powi(PRECISION as i32)) as i64).hash(state);
+    }
 }
 
 #[derive(Debug, Deserialize, Validate)]

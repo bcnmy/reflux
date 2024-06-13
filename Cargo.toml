@@ -2,9 +2,9 @@
 
 members = [
     "crates/config",
-    "crates/routing-engine",
+    "crates/routing_engine",
     "crates/api",
     "crates/storage",
-    "crates/account-aggregation",
+    "crates/account_aggregation",
     "bin/reflux"
 ]

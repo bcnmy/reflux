@@ -1,14 +1,13 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+pub trait RoutingModelStore {
+    type Error;
+
+    async fn get(&self, k: String) -> Result<String, Self::Error>;
+
+    async fn set(&self, k: String, v: String) -> Result<(), Self::Error>;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub trait MessageQueue {
+    async fn publish(&self, topic: &str, message: &str) -> Result<(), String>;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+    async fn subscribe(&self, topic: &str) -> Result<String, String>;
 }
