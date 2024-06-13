@@ -15,3 +15,4 @@ log = "0.4.21"
 # workspace dependencies
 account-aggregation = { workspace = true }
 storage = { workspace = true }
+config = { workspace = true }

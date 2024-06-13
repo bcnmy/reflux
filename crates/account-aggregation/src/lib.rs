@@ -1,36 +1,87 @@
+use crate::types::{ApiResponse, Balance};
+use mongodb::bson::{doc, Document};
 use reqwest::{Client as ReqwestClient, Response};
 use std::error::Error;
 use std::sync::Arc;
-use storage::StorageProvider;
+use storage::db_provider::DBProvider;
+use uuid::Uuid;
 
 mod types;
 
-use crate::types::{Balance, ApiResponse};
-
 #[derive(Clone)]
-pub struct AccountAggregationService {
-    pub storage: Arc<StorageProvider>,
+pub struct AccountAggregationService<T: DBProvider + Send + Sync> {
+    pub storage: Arc<T>,
+    covalent_base_url: String,
     covalent_api_key: String,
 }
 
-impl AccountAggregationService {
-    pub fn new(storage: StorageProvider, covalent_api_key: String) -> Self {
-        Self {
-            storage: Arc::new(storage),
-            covalent_api_key,
-        }
+impl<T: DBProvider + Send + Sync> AccountAggregationService<T> {
+    /// Creates a new [`AccountAggregationService`].
+    pub fn new(storage: T, base_url: String, api_key: String) -> Self {
+        Self { storage: Arc::new(storage), covalent_base_url: base_url, covalent_api_key: api_key }
     }
 
-    pub async fn get_user_accounts(&self, address: &String) -> Vec<String> {
-        println!("Getting user accounts for address: {}", address);
-        // storage get user accounts
-        let users = self.storage.get_user_accounts(address).await;
-        if let Some(users) = users {
-            users
-        } else {
-            log::info!("No users found for address: {}", address);
-            vec![address.clone()]
+    /// Get user ID from an account address.
+    pub async fn get_user_id(&self, address: &String) -> Option<String> {
+        let query = doc! { "account": address };
+        if let Ok(Some(user_mapping)) = self.storage.read::<Document>(&query).await {
+            if let Some(user_id) = user_mapping.get_str("user_id").ok() {
+                return Some(user_id.to_string());
+            }
         }
+        None
+    }
+
+    /// Get user accounts by address.
+    pub async fn get_user_accounts(&self, address: &String) -> Vec<String> {
+        if let Some(user_id) = self.get_user_id(address).await {
+            let query = doc! { "user_id": &user_id };
+            if let Ok(Some(user)) = self.storage.read::<Document>(&query).await {
+                if let Some(accounts) = user.get_array("accounts").ok() {
+                    return accounts.iter().filter_map(|acc| acc.as_str().map(String::from)).collect();
+                }
+            }
+        }
+        vec![address.clone()]
+    }
+
+    /// Register user account, creating a new user ID if necessary.
+    pub async fn register_user_account(&self, address: String, account_type: String, chain_id: String, is_enabled: bool) -> Result<(), Box<dyn Error>> {
+        if self.get_user_id(&address).await.is_none() {
+            let user_id = Uuid::new_v4().to_string();
+            let user_doc = doc! {
+                "user_id": &user_id,
+                "type": account_type.clone(),
+                "accounts": [address.clone()],
+                "chain_id": chain_id,
+                "is_enabled": is_enabled
+            };
+            self.storage.create(&user_doc).await?;
+
+            let mapping_doc = doc! {
+                "account": &address,
+                "user_id": user_id
+            };
+            self.storage.create(&mapping_doc).await?;
+        }
+        Ok(())
+    }
+
+    /// Add a new account to an existing user ID.
+    pub async fn add_account(&self, user_id: String, new_account: String, account_type: String, chain_id: String, is_enabled: bool) -> Result<(), Box<dyn Error>> {
+        let query = doc! { "user_id": &user_id };
+        let update = doc! {
+            "$addToSet": { "accounts": new_account.clone() },
+            "$set": { "type": account_type, "chain_id": chain_id, "is_enabled": is_enabled }
+        };
+        self.storage.update(&query, &update).await?;
+
+        let mapping_doc = doc! {
+            "account": new_account,
+            "user_id": user_id
+        };
+        self.storage.create(&mapping_doc).await?;
+        Ok(())
     }
 
     pub async fn get_user_accounts_balance(&self, users: Vec<String>) -> Vec<Balance> {
@@ -50,15 +101,11 @@ impl AccountAggregationService {
             let client = &client;
             users.iter().map(move |user| {
                 let url = format!(
-                    "https://api.covalenthq.com/v1/{}/address/{}/balances_v2/?key={}&no-spam=true&nft=false",
-                    network, user, self.covalent_api_key
+                    "{}/{}/address/{}/balances_v2/?key={}&no-spam=true&nft=false",
+                    self.covalent_base_url, network, user, self.covalent_api_key
                 );
                 async move {
-                    let res: Response = client
-                        .get(&url)
-                        .send()
-                        .await
-                        .map_err(Box::<dyn Error>::from)?;
+                    let res: Response = client.get(&url).send().await.map_err(Box::<dyn Error>::from)?;
                     let api_response: ApiResponse = res.json().await.map_err(Box::<dyn Error>::from)?;
                     extract_balance_data(api_response)
                 }
@@ -76,11 +123,6 @@ impl AccountAggregationService {
         }
         balances
     }
-
-    pub fn register_user_accounts(&mut self, user_id: String, accounts: Vec<String>) {
-        // storage register user accounts
-        // self.storage.register_user_accounts(user_id, accounts);
-    }
 }
 
 fn extract_balance_data(api_response: ApiResponse) -> Result<Vec<Balance>, Box<dyn Error>> {
@@ -90,10 +132,7 @@ fn extract_balance_data(api_response: ApiResponse) -> Result<Vec<Balance>, Box<d
         .items
         .iter()
         .filter_map(|item| {
-            let token = &item
-                .contract_ticker_symbol
-                .clone()
-                .unwrap_or("NONE".to_string());
+            let token = &item.contract_ticker_symbol.clone().unwrap_or("NONE".to_string());
             let balance_raw = item
                 .balance
                 .clone()
@@ -104,7 +143,6 @@ fn extract_balance_data(api_response: ApiResponse) -> Result<Vec<Balance>, Box<d
             let quote = item.quote;
 
             if item.quote == None || item.quote == Some(0.0) || item.contract_decimals == None {
-                // println!("Zero quote for token: {:?}", item);
                 None
             } else {
                 let balance = balance_raw / 10f64.powf(item.contract_decimals.unwrap() as f64);

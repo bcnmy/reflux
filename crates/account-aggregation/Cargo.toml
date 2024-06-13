@@ -13,3 +13,4 @@ log = "0.4.21"
 
 # workspace dependencies
 storage = { workspace = true }
+uuid = "1.8.0"
