@@ -2,9 +2,9 @@ use std::cmp::PartialEq;
 use std::fmt::{Debug, Display};
 
 use derive_more::{Display, From};
-use num_bigint::BigUint;
 use reqwest;
 use reqwest::header;
+use ruint::aliases::U256;
 use serde::{Deserialize, Serialize};
 use serde::de::StdError;
 
@@ -73,7 +73,7 @@ impl RouteSource for BungeeClient {
     async fn fetch_least_route_cost_in_usd(
         &self,
         route: &Route<'_>,
-        from_token_amount: BigUint,
+        from_token_amount: U256,
         estimation_type: CostType,
     ) -> Result<f64, Self::FetchRouteCostError> {
         // Build GetQuoteRequest
@@ -146,9 +146,7 @@ impl RouteSource for BungeeClient {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use num_bigint::BigUint;
+    use ruint::Uint;
 
     use config::Config;
 
@@ -195,11 +193,7 @@ mod tests {
             to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
         };
         let least_route_cost = client
-            .fetch_least_route_cost_in_usd(
-                &route,
-                BigUint::from_str("100000000").unwrap(),
-                CostType::Fee,
-            )
+            .fetch_least_route_cost_in_usd(&route, Uint::from(100000000), CostType::Fee)
             .await
             .unwrap();
 

@@ -1,4 +1,4 @@
-use num_bigint::BigUint;
+use ruint::aliases::U256;
 
 pub use bungee::BungeeClient;
 use config;
@@ -16,7 +16,7 @@ pub(crate) trait RouteSource {
     async fn fetch_least_route_cost_in_usd(
         &self,
         route: &Route,
-        from_token_amount: BigUint,
+        from_token_amount: U256,
         estimation_type: CostType,
     ) -> Result<f64, Self::FetchRouteCostError>;
 

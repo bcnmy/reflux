@@ -2,12 +2,11 @@ use std::fmt::Display;
 
 use derive_more::{Display, From};
 use ruint;
+use ruint::aliases::U256;
 use ruint::Uint;
 
 use crate::config;
 use crate::token_price::TokenPriceProvider;
-
-type U256 = ruint::Uint<256, 4>;
 
 async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
     config: &'a config::Config,
