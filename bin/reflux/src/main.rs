@@ -1,4 +1,4 @@
-use account_aggregation::AccountAggregationService;
+use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use axum::http::Method;
 use config::Config;
@@ -16,17 +16,13 @@ async fn main() {
     let mongodb_uri = config.infra.mongo_url;
     let (app_host, app_port) = (config.server.host, config.server.port);
 
-    // Create mongodb client
-    let client =
-        mongodb::Client::with_uri_str(&mongodb_uri).await.expect("Failed to create mongodb client");
-
     // Instance of MongoDBProvider for users and account mappings
     let user_db_provider =
-        MongoDBProvider::new(client.clone(), "reflux".to_string(), "users".to_string(), true)
+        MongoDBProvider::new(&mongodb_uri, "reflux".to_string(), "users".to_string(), true)
             .await
             .expect("Failed to create MongoDB provider for users");
     let account_mapping_db_provider = MongoDBProvider::new(
-        client.clone(),
+        &mongodb_uri,
         "reflux".to_string(),
         "account_mappings".to_string(),
         false,

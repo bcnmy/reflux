@@ -1,6 +1,6 @@
 use crate::route_fee_bucket::RouteFeeBucket;
+use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
-use account_aggregation::AccountAggregationService;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,17 +55,17 @@ impl RoutingEngine {
     /// This function will get the user balances from the aas and then calculate the best cost path for the user
     pub async fn get_best_cost_path(
         &self,
-        user_id: &str,
+        account: &str,
         to_chain: u32,
         to_token: &str,
         to_value: f64,
     ) -> Vec<Route> {
         println!(
             "user: {}, to_chain: {}, to_token: {}, to_value: {}\n",
-            user_id, to_chain, to_token, to_value
+            account, to_chain, to_token, to_value
         );
-        let user_balances = self.get_user_balance_from_agg_service(user_id).await;
-        println!("User balances: {:?}\n", user_balances);
+        let user_balances = self.get_user_balance_from_agg_service(&account).await;
+        // println!("User balances: {:?}\n", user_balances);
 
         // todo: for account aggregation, transfer same chain same asset first
         let direct_assets: Vec<_> =
@@ -175,8 +175,8 @@ impl RoutingEngine {
     }
 
     /// Get user balance from account aggregation service
-    async fn get_user_balance_from_agg_service(&self, user_id: &str) -> Vec<Balance> {
+    async fn get_user_balance_from_agg_service(&self, account: &str) -> Vec<Balance> {
         // Note: aas should always return vec of balances
-        self.aas_client.get_user_accounts_balance(&user_id.to_string()).await
+        self.aas_client.get_user_accounts_balance(&account.to_string()).await
     }
 }

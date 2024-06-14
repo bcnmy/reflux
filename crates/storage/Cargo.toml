@@ -10,6 +10,7 @@ futures = "0.3.30"
 serde = { version = "1.0.203", features = ["derive"] }
 async-trait = "0.1.80"
 serde_json = "1.0.117"
+thiserror = "1.0"
 derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
 
 [dev-dependencies]
