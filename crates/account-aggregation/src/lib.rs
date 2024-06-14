@@ -21,6 +21,7 @@ pub struct AccountAggregationService {
     pub account_mapping_db_provider: Arc<MongoDBProvider>,
     covalent_base_url: String,
     covalent_api_key: String,
+    client: ReqwestClient,
 }
 
 impl AccountAggregationService {
@@ -31,11 +32,14 @@ impl AccountAggregationService {
         base_url: String,
         api_key: String,
     ) -> Self {
+        // todo: should add the arc once here for multiple tasks
+        let reqwest_client = ReqwestClient::new();
         Self {
             user_db_provider: Arc::new(user_db_provider),
             account_mapping_db_provider: Arc::new(account_mapping_db_provider),
             covalent_base_url: base_url,
             covalent_api_key: api_key,
+            client: reqwest_client,
         }
     }
 
@@ -43,29 +47,16 @@ impl AccountAggregationService {
     pub async fn get_user_id(&self, address: &String) -> Option<String> {
         let address = address.to_lowercase();
         let query = doc! { "account": address };
-        if let Ok(Some(user_mapping)) =
-            self.account_mapping_db_provider.read::<Document>(&query).await
-        {
-            if let Some(user_id) = user_mapping.get_str("user_id").ok() {
-                return Some(user_id.to_string());
-            }
-        }
-        None
+        let user_mapping = self.account_mapping_db_provider.read::<Document>(&query).await.ok()??;
+        Some(user_mapping.get_str("user_id").ok()?.to_string())
     }
 
     /// Get the accounts associated with a user_id
     pub async fn get_user_accounts(&self, user_id: &String) -> Option<Vec<String>> {
         let query = doc! { "user_id": user_id };
-        if let Ok(Some(user)) = self.user_db_provider.read::<Document>(&query).await {
-            if let Some(accounts) = user.get_array("accounts").ok() {
-                let accounts: Vec<String> = accounts
-                    .iter()
-                    .filter_map(|account| account.as_str().map(|s| s.to_string()))
-                    .collect();
-                return Some(accounts);
-            }
-        }
-        None
+        let user = self.user_db_provider.read::<Document>(&query).await.ok()??;
+        let accounts = user.get_array("accounts").ok()?;
+        Some(accounts.iter().filter_map(|account| account.as_str().map(|s| s.to_string())).collect())
     }
 
     /// Register a new user account
@@ -134,7 +125,6 @@ impl AccountAggregationService {
             accounts.iter().filter_map(|account| account.as_str().map(|s| s.to_string())).collect();
 
         let mut balances = Vec::new();
-        let client = Arc::new(ReqwestClient::new());
         let networks = [
             // "eth-mainnet",
             "matic-mainnet",
@@ -152,7 +142,7 @@ impl AccountAggregationService {
                     "{}/v1/{}/address/{}/balances_v2/?key={}",
                     self.covalent_base_url, network, user, self.covalent_api_key
                 );
-                let response = client.get(&url).send().await.unwrap();
+                let response = self.client.get(&url).send().await.unwrap();
                 let api_response: ApiResponse = response.json().await.unwrap();
                 let user_balances = extract_balance_data(api_response).unwrap();
                 balances.extend(user_balances);
