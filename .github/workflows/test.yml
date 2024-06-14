@@ -1,11 +1,38 @@
 name: Test Suite
-on: [ pull_request, push ]
+on: [pull_request, push]
 
 jobs:
   test:
-    name: cargo test
+    name: Run Tests
     runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-features
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Wait for MongoDB to be ready
+        run: |
+          for i in {1..30}; do
+            if mongo --eval "db.runCommand({ ping: 1 })"; then
+              echo "MongoDB is ready"
+              break
+            fi
+            echo "Waiting for MongoDB to be ready..."
+            sleep 5
+          done
+
+      - name: Run Tests
+        run: cargo test --all-features
