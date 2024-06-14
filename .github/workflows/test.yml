@@ -3,12 +3,12 @@ on: [pull_request, push]
 
 jobs:
   test:
-    name: Run Tests
+    name: cargo test
     runs-on: ubuntu-latest
 
     services:
       mongodb:
-        image: mongo:latest
+        image: mongo:v5.0.12
         ports:
           - 27017:27017
         options: >-
