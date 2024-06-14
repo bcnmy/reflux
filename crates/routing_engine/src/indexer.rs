@@ -12,7 +12,7 @@ use crate::estimator::Estimator;
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
 
-struct Indexer<
+pub struct Indexer<
     'config,
     Source: source::RouteSource,
     ModelStore: storage::RoutingModelStore,
@@ -21,8 +21,8 @@ struct Indexer<
 > {
     config: &'config config::Config,
     source: &'config Source,
-    model_store: &'config ModelStore,
-    message_producer: &'config Producer,
+    model_store: &'config mut ModelStore,
+    message_producer: &'config mut Producer,
     token_price_provider: &'config TokenPriceProvider,
 }
 
@@ -39,8 +39,8 @@ impl<
     fn new(
         config: &'config config::Config,
         source: &'config RouteSource,
-        model_store: &'config ModelStore,
-        message_producer: &'config Producer,
+        model_store: &'config mut ModelStore,
+        message_producer: &'config mut Producer,
         token_price_provider: &'config TokenPriceProvider,
     ) -> Self {
         Indexer { config, source, model_store, message_producer, token_price_provider }
@@ -91,7 +91,7 @@ impl<
 
                     Ok::<
                         estimator::DataPoint<f64, f64>,
-                        IndexerErrors<'config, TokenPriceProvider, RouteSource, ModelStore>,
+                        IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
                     >(estimator::DataPoint {
                         x: input_value_in_usd,
                         y: fee_in_usd,
@@ -102,43 +102,52 @@ impl<
             .collect::<Vec<
                 Result<
                     estimator::DataPoint<f64, f64>,
-                    IndexerErrors<'config, TokenPriceProvider, RouteSource, ModelStore>,
+                    IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
                 >,
             >>()
             .await
             .into_iter()
             .filter(|r| r.is_ok())
-            .map(|r| r.unwrap())
+            .map(|r| match r {
+                Result::Ok(data_point) => data_point,
+                _ => unreachable!(),
+            })
             .collect();
 
         // Build the Estimator
         Estimator::build(data_points)
     }
 
-    async fn publish_estimator<
+    async fn publish_estimators<
         'est,
         'est_de,
         Estimator: estimator::Estimator<'est_de, f64, f64>,
     >(
-        &self,
-        bucket_config: &'config BucketConfig,
-        estimator: &'est Estimator,
+        &mut self,
+        values: Vec<(&&BucketConfig, &Estimator)>,
     ) -> Result<(), IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>> {
-        let mut s = DefaultHasher::new();
-        bucket_config.hash(&mut s);
+        let values_transformed = values
+            .iter()
+            .map(|(k, v)| {
+                let mut s = DefaultHasher::new();
+                k.hash(&mut s);
+                let key = s.finish().to_string();
 
-        let key = s.finish();
-        let value = serde_json::to_string(estimator).unwrap();
+                let value = serde_json::to_string(v).unwrap();
+
+                (key, value)
+            })
+            .collect::<Vec<(String, String)>>();
 
         Ok(self
             .model_store
-            .set(key.to_string(), value)
+            .set_multiple(&values_transformed)
             .await
             .map_err(IndexerErrors::PublishEstimatorError)?)
     }
 
     pub async fn run<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>>(
-        &self,
+        &mut self,
     ) -> Result<
         HashMap<&'config BucketConfig, Estimator>,
         IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
@@ -146,7 +155,7 @@ impl<
         // Build Estimators
         let estimator_map: HashMap<&BucketConfig, Estimator> =
             futures::stream::iter(self.config.buckets.iter())
-                .map(|bucket| async move {
+                .map(|bucket| async {
                     // Build the Estimator
                     let estimator: Estimator = self.build_estimator(bucket, &CostType::Fee).await?;
 
@@ -160,27 +169,7 @@ impl<
                 .map(|r| r.unwrap())
                 .collect();
 
-        // Publish Estimators
-        // todo: batch update?
-        let failed_publish_errors: Vec<_> = futures::stream::iter(estimator_map.iter())
-            .map(|(bucket, estimator)| self.publish_estimator(bucket, estimator))
-            .buffer_unordered(BUCKET_PROCESSING_RATE_LIMIT)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .filter_map(|result| {
-                if result.is_err() {
-                    return match result.unwrap_err() {
-                        IndexerErrors::PublishEstimatorError(err) => Some(err),
-                        _ => None,
-                    };
-                }
-                None
-            })
-            .collect();
-        if failed_publish_errors.len() > 0 {
-            return Err(IndexerErrors::PublishEstimatorErrors(failed_publish_errors));
-        }
+        self.publish_estimators(estimator_map.iter().collect()).await?;
 
         // Broadcast a Message to other nodes to update their cache
         self.message_producer
@@ -197,7 +186,6 @@ impl<
 
 #[derive(Debug, Display)]
 enum IndexerErrors<
-    'config,
     T: token_price::TokenPriceProvider,
     S: source::RouteSource,
     R: storage::RoutingModelStore,
@@ -206,7 +194,7 @@ enum IndexerErrors<
     RouteBuildError(RouteError),
 
     #[display(fmt = "Token price provider error: {}", _0)]
-    TokenPriceProviderError(token_price::utils::Errors<'config, T::Error>),
+    TokenPriceProviderError(token_price::utils::Errors<T::Error>),
 
     #[display(fmt = "Route source error: {}", _0)]
     RouteSourceError(S::FetchRouteCostError),
@@ -239,22 +227,30 @@ mod tests {
     impl RoutingModelStore for ModelStoreStub {
         type Error = ();
 
-        async fn get(&self, k: String) -> Result<String, Self::Error> {
+        async fn get(&mut self, k: &String) -> Result<String, Self::Error> {
             Ok("Get".to_string())
         }
 
-        async fn set(&self, k: String, v: String) -> Result<(), Self::Error> {
+        async fn get_multiple(&mut self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+            Ok(vec!["Get".to_string(); k.len()])
+        }
+
+        async fn set(&mut self, k: &String, v: &String) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn set_multiple(&mut self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
             Ok(())
         }
     }
 
     struct ProducerStub;
     impl MessageQueue for ProducerStub {
-        async fn publish(&self, topic: &str, message: &str) -> Result<(), String> {
+        async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String> {
             Ok(())
         }
 
-        async fn subscribe(&self, topic: &str) -> Result<String, String> {
+        async fn subscribe(&mut self, topic: &str) -> Result<String, String> {
             Ok("Subscribed".to_string())
         }
     }
@@ -350,12 +346,13 @@ indexer_config:
 
     #[tokio::test]
     async fn test_build_estimator() {
-        let (config, bungee_client, model_store, message_producer, token_price_provider) = setup();
+        let (config, bungee_client, mut model_store, mut message_producer, token_price_provider) =
+            setup();
         let indexer = Indexer::new(
             &config,
             &bungee_client,
-            &model_store,
-            &message_producer,
+            &mut model_store,
+            &mut message_producer,
             &token_price_provider,
         );
 

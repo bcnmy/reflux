@@ -3,6 +3,7 @@ use ruint;
 
 use config;
 use config::BucketConfig;
+pub use indexer::Indexer;
 
 pub mod estimator;
 pub mod indexer;

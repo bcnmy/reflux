@@ -14,18 +14,18 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
     token_symbol: &'config String,
     chain_id: u32,
     value_in_usd: f64,
-) -> Result<U256, Errors<'config, T::Error>> {
+) -> Result<U256, Errors<T::Error>> {
     let token_price = token_price_provider.get_token_price(token_symbol).await?;
 
     let token_config = config.tokens.get(token_symbol);
     if token_config.is_none() {
-        return Err(Errors::TokenConfigurationNotFound(token_symbol));
+        return Err(Errors::TokenConfigurationNotFound(token_symbol.clone()));
     }
     let token_config = token_config.unwrap();
 
     let token_config_by_chain = token_config.by_chain.get(&chain_id);
     if token_config_by_chain.is_none() {
-        return Err(Errors::TokenConfigurationNotFoundForChain(token_symbol, chain_id));
+        return Err(Errors::TokenConfigurationNotFoundForChain(token_symbol.clone(), chain_id));
     }
     let token_config_by_chain = token_config_by_chain.unwrap();
 
@@ -38,17 +38,17 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
 }
 
 #[derive(Debug, Display, From)]
-pub(crate) enum Errors<'config, T: Display> {
+pub(crate) enum Errors<T: Display> {
     #[display(fmt = "Token price provider error: {}", _0)]
     TokenPriceProviderError(T),
 
     #[display(fmt = "Could not find token configuration for {}", _0)]
     #[from(ignore)]
-    TokenConfigurationNotFound(&'config String),
+    TokenConfigurationNotFound(String),
 
     #[display(fmt = "Could not find token configuration for {} on chain {}", _0, _1)]
     #[from(ignore)]
-    TokenConfigurationNotFoundForChain(&'config String, u32),
+    TokenConfigurationNotFoundForChain(String, u32),
 }
 
 #[cfg(test)]
