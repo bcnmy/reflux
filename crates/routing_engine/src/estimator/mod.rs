@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use serde::{Deserialize, Serialize};
 
 pub use linear_regression_estimator::LinearRegressionEstimator;
@@ -11,7 +13,7 @@ pub struct DataPoint<Input, Output> {
 }
 
 pub trait Estimator<'de, Input, Output>: Serialize + Deserialize<'de> {
-    type Error;
+    type Error: Debug;
 
     fn build(data: Vec<DataPoint<Input, Output>>) -> Result<Self, Self::Error>;
 

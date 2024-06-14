@@ -8,13 +8,13 @@ use ruint::Uint;
 use crate::config;
 use crate::token_price::TokenPriceProvider;
 
-pub async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
-    config: &'a config::Config,
-    token_price_provider: &'a T,
-    token_symbol: &'a String,
+pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
+    config: &'config config::Config,
+    token_price_provider: &'config T,
+    token_symbol: &'config String,
     chain_id: u32,
     value_in_usd: f64,
-) -> Result<U256, Errors<'a, T::Error>> {
+) -> Result<U256, Errors<'config, T::Error>> {
     let token_price = token_price_provider.get_token_price(token_symbol).await?;
 
     let token_config = config.tokens.get(token_symbol);
@@ -38,17 +38,17 @@ pub async fn get_token_amount_from_value_in_usd<'a, T: TokenPriceProvider>(
 }
 
 #[derive(Debug, Display, From)]
-pub(crate) enum Errors<'a, T: Display> {
+pub(crate) enum Errors<'config, T: Display> {
     #[display(fmt = "Token price provider error: {}", _0)]
     TokenPriceProviderError(T),
 
     #[display(fmt = "Could not find token configuration for {}", _0)]
     #[from(ignore)]
-    TokenConfigurationNotFound(&'a String),
+    TokenConfigurationNotFound(&'config String),
 
     #[display(fmt = "Could not find token configuration for {} on chain {}", _0, _1)]
     #[from(ignore)]
-    TokenConfigurationNotFoundForChain(&'a String, u32),
+    TokenConfigurationNotFoundForChain(&'config String, u32),
 }
 
 #[cfg(test)]
@@ -91,7 +91,10 @@ infra:
 server:
   port: 8080
   host: 'localhost'
-is_indexer: true
+indexer_config:
+    is_indexer: true
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
         "#,
         )
         .unwrap()

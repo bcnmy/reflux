@@ -205,7 +205,10 @@ infra:
 server:
   port: 8080
   host: 'localhost'
-is_indexer: true
+indexer_config:
+    is_indexer: true
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
         "#,
         )
         .unwrap();
