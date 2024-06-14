@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
@@ -26,8 +27,8 @@ pub struct Config {
     pub infra: InfraConfig,
     // API Server Configuration
     pub server: ServerConfig,
-    // Whether to run the routes indexer + algorithm on this node.
-    pub is_indexer: bool,
+    // Configuration for the indexer
+    pub indexer_config: IndexerConfig,
 }
 
 impl Config {
@@ -124,7 +125,7 @@ impl Config {
             coingecko: raw_config.coingecko,
             infra: raw_config.infra,
             server: raw_config.server,
-            is_indexer: raw_config.is_indexer,
+            indexer_config: raw_config.indexer_config,
         })
     }
 }
@@ -170,7 +171,11 @@ impl ValidateUniqueItems for Buckets {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
         self.0
             .iter()
-            .map(|b| (b.from_chain_id, b.to_chain_id))
+            .map(|b| {
+                let mut s = DefaultHasher::new();
+                b.hash(&mut s);
+                s.finish()
+            })
             .collect::<Vec<_>>()
             .validate_unique_items()
     }
@@ -222,7 +227,7 @@ pub struct RawConfig {
     pub covalent: CovalentConfig,
     pub infra: InfraConfig,
     pub server: ServerConfig,
-    pub is_indexer: bool,
+    pub indexer_config: IndexerConfig,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -248,6 +253,37 @@ pub struct BucketConfig {
     #[validate(minimum = 1.0)]
     pub token_amount_to_usd: f64,
 }
+
+// Implementation for treating a BucketConfig as a key in a k-v pair
+impl Hash for BucketConfig {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        const PRECISION: u32 = 5;
+
+        self.from_chain_id.hash(state);
+        self.to_chain_id.hash(state);
+        self.from_token.hash(state);
+        self.to_token.hash(state);
+        self.is_smart_contract_deposit_supported.hash(state);
+
+        // We limit the precision of amounts to <PRECISION> decimal places
+        ((self.token_amount_from_usd * 10_f64.powi(PRECISION as i32)) as i64).hash(state);
+        ((self.token_amount_to_usd * 10_f64.powi(PRECISION as i32)) as i64).hash(state);
+    }
+}
+
+impl PartialEq<Self> for BucketConfig {
+    fn eq(&self, other: &Self) -> bool {
+        let mut s1 = DefaultHasher::new();
+        let mut s2 = DefaultHasher::new();
+
+        self.hash(&mut s1);
+        other.hash(&mut s2);
+
+        s1.finish() == s2.finish()
+    }
+}
+
+impl Eq for BucketConfig {}
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct ChainConfig {
@@ -365,6 +401,17 @@ pub struct ServerConfig {
     pub host: String,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct IndexerConfig {
+    pub is_indexer: bool,
+
+    #[validate(min_length = 1)]
+    pub indexer_update_topic: String,
+
+    #[validate(min_length = 1)]
+    pub indexer_update_message: String,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::{Config, ConfigError};
@@ -426,7 +473,10 @@ infra:
 server:
     port: 8080
     host: 'localhost'
-is_indexer: true
+indexer_config:
+    is_indexer: true
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
         "#;
         let config = Config::from_yaml_str(&config).unwrap();
 
@@ -487,7 +537,10 @@ is_indexer: true
         assert_eq!(config.infra.redis_url, "redis://localhost:6379");
         assert_eq!(config.infra.rabbitmq_url, "amqp://localhost:5672");
         assert_eq!(config.infra.mongo_url, "mongodb://localhost:27017");
-        assert_eq!(config.is_indexer, true);
+
+        assert_eq!(config.indexer_config.is_indexer, true);
+        assert_eq!(config.indexer_config.indexer_update_topic, "indexer_update");
+        assert_eq!(config.indexer_config.indexer_update_message, "message");
     }
 
     #[test]
@@ -518,7 +571,10 @@ infra:
 server:
     port: 8080
     host: 'localhost'
-is_indexer: true
+indexer_config:
+    is_indexer: true
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
         "#;
 
         assert_eq!(
@@ -578,7 +634,10 @@ infra:
 server:
     port: 8080
     host: 'localhost'
-is_indexer: true
+indexer_config:
+    is_indexer: true
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
         "#;
 
         assert_eq!(
