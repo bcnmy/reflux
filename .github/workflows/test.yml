@@ -1,11 +1,27 @@
 name: Test Suite
-on: [ pull_request, push ]
+on: [pull_request, push]
 
 jobs:
   test:
     name: cargo test
     runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval=30s
+          --health-timeout=10s
+          --health-retries=10
+
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-features
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Tests
+        run: cargo test --all-features
