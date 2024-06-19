@@ -8,10 +8,8 @@ mod tests;
 pub mod token_price;
 
 use derive_more::{Display, From};
-use ruint;
 
-use config;
-use config::BucketConfig;
+use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
 pub use indexer::Indexer;
 
 pub mod estimator;
@@ -25,18 +23,15 @@ enum CostType {
 }
 
 pub struct Route<'a> {
-    from_chain: &'a config::ChainConfig,
-    to_chain: &'a config::ChainConfig,
-    from_token: &'a config::TokenConfig,
-    to_token: &'a config::TokenConfig,
+    from_chain: &'a ChainConfig,
+    to_chain: &'a ChainConfig,
+    from_token: &'a TokenConfig,
+    to_token: &'a TokenConfig,
     is_smart_contract_deposit: bool,
 }
 
 impl<'a> Route<'a> {
-    pub fn build(
-        bucket: &'a BucketConfig,
-        config: &'a config::Config,
-    ) -> Result<Route<'a>, RouteError> {
+    pub fn build(bucket: &'a BucketConfig, config: &'a Config) -> Result<Route<'a>, RouteError> {
         let from_chain = config.chains.get(&bucket.from_chain_id);
         if from_chain.is_none() {
             return Err(RouteError::ChainNotFoundError(bucket.from_chain_id));

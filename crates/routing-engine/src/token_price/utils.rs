@@ -3,7 +3,6 @@ use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
 
-use crate::config;
 use crate::token_price::TokenPriceProvider;
 
 pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(

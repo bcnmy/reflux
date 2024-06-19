@@ -1,11 +1,8 @@
-use std::cmp::PartialEq;
-
+use config::config::BungeeConfig;
 use derive_more::{Display, From};
 use reqwest;
 use reqwest::header;
 use ruint::aliases::U256;
-use serde::de::StdError;
-use serde::{Deserialize, Serialize};
 
 use types::*;
 
@@ -22,7 +19,7 @@ pub struct BungeeClient {
 
 impl BungeeClient {
     pub(crate) fn new(
-        config::BungeeConfig { base_url, api_key }: &config::BungeeConfig,
+        BungeeConfig { base_url, api_key }: &BungeeConfig,
     ) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);

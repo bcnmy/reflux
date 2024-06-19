@@ -4,9 +4,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use derive_more::Display;
 use futures::stream::StreamExt;
 
-use config::BucketConfig;
+use config::config::BucketConfig;
 
-use crate::estimator::Estimator;
 use crate::{estimator, source, token_price, CostType, Route, RouteError};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
