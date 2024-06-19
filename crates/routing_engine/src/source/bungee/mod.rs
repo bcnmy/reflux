@@ -122,8 +122,8 @@ impl RouteSource for BungeeClient {
             .iter()
             .map(|route| match estimation_type {
                 CostType::Fee => Some(
-                    route.total_gas_fees_in_usd + route.output_value_in_usd?
-                        - route.input_value_in_usd?,
+                    route.total_gas_fees_in_usd + route.input_value_in_usd?
+                        - route.output_value_in_usd?,
                 ),
                 _ => None,
             })

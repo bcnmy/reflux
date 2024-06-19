@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+pub use ::redis::{ControlFlow, Msg};
+
 mod redis;
 
 pub trait RoutingModelStore {
@@ -15,7 +17,13 @@ pub trait RoutingModelStore {
 }
 
 pub trait MessageQueue {
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String>;
+    type Error: Debug;
 
-    async fn subscribe(&mut self, topic: &str) -> Result<String, String>;
+    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error>;
+
+    fn subscribe<U>(
+        &mut self,
+        topic: &str,
+        callback: impl FnMut(Msg) -> ControlFlow<U>,
+    ) -> Result<(), Self::Error>;
 }

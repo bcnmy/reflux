@@ -1,5 +1,5 @@
 use redis;
-use redis::{aio, AsyncCommands};
+use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
 use redis::RedisError;
 use thiserror::Error;
 
@@ -41,12 +41,20 @@ impl RoutingModelStore for RedisClient {
 }
 
 impl MessageQueue for RedisClient {
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String> {
-        todo!()
+    type Error = RedisClientError;
+
+    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        self.connection.publish(topic, message).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn subscribe(&mut self, topic: &str) -> Result<String, String> {
-        todo!()
+    fn subscribe<U>(
+        &mut self,
+        topic: &str,
+        callback: impl FnMut(Msg) -> ControlFlow<U>,
+    ) -> Result<(), Self::Error> {
+        let mut connection = self.client.get_connection()?;
+        connection.subscribe(topic, callback)?;
+        Ok(())
     }
 }
 
@@ -58,6 +66,8 @@ pub enum RedisClientError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc::channel;
+
     use tokio;
 
     use super::*;
@@ -68,7 +78,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_redis_client() {
+    async fn test_key_store() {
         let mut client = setup().await;
 
         let keys = vec!["test_key1".to_string(), "test_key2".to_string()];
@@ -99,5 +109,32 @@ mod tests {
         // Multi Get
         let values = client.get_multiple(&keys).await.unwrap();
         assert_eq!(values, vec!["test_value1".to_string(), "test_value2".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_pub_sub() {
+        let (tx, mut rx) = channel::<String>();
+        let mut client = setup().await;
+
+        tokio::task::spawn_blocking(move || {
+            client
+                .subscribe("TOPIC", |msg: Msg| -> ControlFlow<String> {
+                    let message = msg.get_payload().unwrap();
+                    tx.send(message).expect("Sending message failed");
+
+                    ControlFlow::Break("DONE".to_string())
+                })
+                .unwrap();
+        });
+
+        let mut client = setup().await;
+        client.publish("TOPIC", "HELLO").await.unwrap();
+
+        loop {
+            if let Ok(data) = rx.recv() {
+                assert_eq!(data, "HELLO".to_string());
+                break;
+            }
+        }
     }
 }
