@@ -23,7 +23,9 @@ pub trait RoutingModelStore {
 }
 
 pub trait MessageQueue {
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String>;
+    type Error: Debug;
 
-    async fn subscribe(&mut self, topic: &str) -> Result<String, String>;
+    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error>;
+
+    async fn subscribe(&mut self, topic: &str) -> Result<String, Self::Error>;
 }

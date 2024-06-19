@@ -1,5 +1,5 @@
 use redis;
-use redis::{aio, AsyncCommands};
+use redis::{aio, AsyncCommands, Commands};
 use redis::RedisError;
 use thiserror::Error;
 
@@ -41,11 +41,13 @@ impl RoutingModelStore for RedisClient {
 }
 
 impl MessageQueue for RedisClient {
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String> {
-        todo!()
+    type Error = RedisClientError;
+
+    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        self.connection.publish(topic, message).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn subscribe(&mut self, topic: &str) -> Result<String, String> {
+    async fn subscribe(&mut self, topic: &str) -> Result<String, Self::Error> {
         todo!()
     }
 }
