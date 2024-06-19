@@ -6,7 +6,6 @@ pub mod db_provider;
 pub mod errors;
 pub mod mongodb_provider;
 
-mod account;
 mod redis;
 
 pub trait RoutingModelStore {

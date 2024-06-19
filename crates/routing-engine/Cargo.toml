@@ -13,6 +13,7 @@ derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"]
 reqwest = "0.12.4"
 ruint = "1.12.3"
 linreg = "0.2.0"
+thiserror = "1.0.61"
 
 # workspace dependencies
 account-aggregation = { workspace = true }

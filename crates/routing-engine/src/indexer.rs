@@ -6,7 +6,7 @@ use futures::stream::StreamExt;
 
 use config::config::BucketConfig;
 
-use crate::{estimator, source, token_price, CostType, Route, RouteError};
+use crate::{CostType, estimator, Route, RouteError, source, token_price};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -212,15 +212,16 @@ enum IndexerErrors<
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::fmt::Error;
 
     use config::Config;
     use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
 
+    use crate::CostType;
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
     use crate::source::BungeeClient;
     use crate::token_price::TokenPriceProvider;
-    use crate::CostType;
 
     #[derive(Debug)]
     struct ModelStoreStub;
@@ -264,7 +265,7 @@ mod tests {
     #[derive(Debug)]
     struct TokenPriceProviderStub;
     impl TokenPriceProvider for TokenPriceProviderStub {
-        type Error = String;
+        type Error = Error;
 
         async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error> {
             Ok(1.0) // USDC

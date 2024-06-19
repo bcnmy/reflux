@@ -1,5 +1,5 @@
-use derive_more::{Display, From};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Deserialize, Debug)]
 pub struct BungeeResponse<T> {
@@ -101,18 +101,14 @@ pub struct GetQuoteResponseRefuelGasFee {
 }
 
 // Errors
-#[derive(Debug, Display, From)]
+#[derive(Debug, Error)]
 pub enum BungeeClientError {
-    #[display(
-        "Error while deserializing response: Deserialization error: {}. Response: {}",
-        _1,
-        _0
-    )]
+    #[error("Error while deserializing response: {0}")]
     DeserializationError(String, serde_json::Error),
 
-    #[display("Error while making request: Request error: {}", _0)]
-    RequestError(reqwest::Error),
+    #[error("Error while making request: Request error: {}", _0)]
+    RequestError(#[from] reqwest::Error),
 
-    #[display("No route returned by Bungee API")]
+    #[error("No route returned by Bungee API")]
     NoRouteError,
 }

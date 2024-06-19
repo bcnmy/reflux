@@ -1,3 +1,9 @@
+use derive_more::{Display, From};
+use thiserror::Error;
+
+use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
+pub use indexer::Indexer;
+
 // use route_fee_bucket::RouteFeeBucket;
 pub mod engine;
 pub mod route_fee_bucket;
@@ -7,16 +13,11 @@ mod traits;
 mod tests;
 pub mod token_price;
 
-use derive_more::{Display, From};
-
-use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
-pub use indexer::Indexer;
-
 pub mod estimator;
 pub mod indexer;
 mod source;
 
-#[derive(Debug, Display)]
+#[derive(Debug, Error, Display)]
 enum CostType {
     Fee,
     BridgingTime,

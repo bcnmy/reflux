@@ -2,6 +2,7 @@ use derive_more::{Display, From};
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
+use thiserror::Error;
 
 use crate::token_price::TokenPriceProvider;
 
@@ -12,7 +13,10 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
     chain_id: u32,
     value_in_usd: f64,
 ) -> Result<U256, Errors<T::Error>> {
-    let token_price = token_price_provider.get_token_price(token_symbol).await?;
+    let token_price = token_price_provider
+        .get_token_price(token_symbol)
+        .await
+        .map_err(Errors::<T::Error>::TokenPriceProviderError)?;
 
     let token_config = config.tokens.get(token_symbol);
     if token_config.is_none() {
@@ -34,22 +38,22 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
     Ok(token_amount_in_wei)
 }
 
-#[derive(Debug, Display, From)]
+#[derive(Debug, Error)]
 pub(crate) enum Errors<T: Display> {
-    #[display("Token price provider error: {}", _0)]
-    TokenPriceProviderError(T),
+    #[error("Token price provider error: {}", _0)]
+    TokenPriceProviderError(#[from] T),
 
-    #[display("Could not find token configuration for {}", _0)]
-    #[from(ignore)]
+    #[error("Could not find token configuration for {}", _0)]
     TokenConfigurationNotFound(String),
 
-    #[display("Could not find token configuration for {} on chain {}", _0, _1)]
-    #[from(ignore)]
+    #[error("Could not find token configuration for {} on chain {}", _0, _1)]
     TokenConfigurationNotFoundForChain(String, u32),
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Error;
+
     use ruint::Uint;
 
     use config::Config;
@@ -101,7 +105,7 @@ indexer_config:
     struct TokenPriceProviderStub;
 
     impl TokenPriceProvider for TokenPriceProviderStub {
-        type Error = String;
+        type Error = Error;
 
         async fn get_token_price(&self, _: &String) -> Result<f64, Self::Error> {
             Ok(0.1)
