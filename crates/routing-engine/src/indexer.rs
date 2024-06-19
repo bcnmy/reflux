@@ -4,10 +4,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use derive_more::Display;
 use futures::stream::StreamExt;
 
-use config::BucketConfig;
+use config::config::BucketConfig;
 
-use crate::{CostType, estimator, Route, RouteError, source, token_price};
-use crate::estimator::Estimator;
+use crate::{estimator, source, token_price, CostType, Route, RouteError};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -191,22 +190,22 @@ enum IndexerErrors<
     R: storage::RoutingModelStore,
     U: storage::MessageQueue,
 > {
-    #[display(fmt = "Route build error: {}", _0)]
+    #[display("Route build error: {}", _0)]
     RouteBuildError(RouteError),
 
-    #[display(fmt = "Token price provider error: {}", _0)]
+    #[display("Token price provider error: {}", _0)]
     TokenPriceProviderError(token_price::utils::Errors<T::Error>),
 
-    #[display(fmt = "Route source error: {}", _0)]
+    #[display("Route source error: {}", _0)]
     RouteSourceError(S::FetchRouteCostError),
 
-    #[display(fmt = "Publish estimator error: {}", _0)]
+    #[display("Publish estimator error: {}", _0)]
     PublishEstimatorError(R::Error),
 
-    #[display(fmt = "Publish estimator errors: {:?}", _0)]
+    #[display("Publish estimator errors: {:?}", _0)]
     PublishEstimatorErrors(Vec<R::Error>),
 
-    #[display(fmt = "Indexer update message error: {}", _0)]
+    #[display("Indexer update message error: {}", _0)]
     PublishIndexerUpdateMessageError(U::Error),
 }
 
@@ -217,11 +216,11 @@ mod tests {
     use config::Config;
     use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
 
-    use crate::CostType;
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
     use crate::source::BungeeClient;
     use crate::token_price::TokenPriceProvider;
+    use crate::CostType;
 
     #[derive(Debug)]
     struct ModelStoreStub;
@@ -253,10 +252,10 @@ mod tests {
             Ok(())
         }
 
-        fn subscribe<U>(
+        fn subscribe<String>(
             &mut self,
             topic: &str,
-            callback: impl FnMut(Msg) -> ControlFlow<U>,
+            callback: impl FnMut(Msg) -> ControlFlow<String>,
         ) -> Result<(), Self::Error> {
             Ok(())
         }

@@ -1,11 +1,8 @@
-use std::fmt::Display;
-
 use derive_more::{Display, From};
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
 
-use crate::config;
 use crate::token_price::TokenPriceProvider;
 
 pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
@@ -39,14 +36,14 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
 
 #[derive(Debug, Display, From)]
 pub(crate) enum Errors<T: Display> {
-    #[display(fmt = "Token price provider error: {}", _0)]
+    #[display("Token price provider error: {}", _0)]
     TokenPriceProviderError(T),
 
-    #[display(fmt = "Could not find token configuration for {}", _0)]
+    #[display("Could not find token configuration for {}", _0)]
     #[from(ignore)]
     TokenConfigurationNotFound(String),
 
-    #[display(fmt = "Could not find token configuration for {} on chain {}", _0, _1)]
+    #[display("Could not find token configuration for {} on chain {}", _0, _1)]
     #[from(ignore)]
     TokenConfigurationNotFoundForChain(String, u32),
 }

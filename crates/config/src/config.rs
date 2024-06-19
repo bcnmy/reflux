@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 use serde_valid::yaml::FromYamlStr;
+use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 
 // Config Type
 #[derive(Debug)]

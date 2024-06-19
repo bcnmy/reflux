@@ -104,15 +104,15 @@ pub struct GetQuoteResponseRefuelGasFee {
 #[derive(Debug, Display, From)]
 pub enum BungeeClientError {
     #[display(
-        fmt = "Error while deserializing response: Deserialization error: {}. Response: {}",
+        "Error while deserializing response: Deserialization error: {}. Response: {}",
         _1,
         _0
     )]
     DeserializationError(String, serde_json::Error),
 
-    #[display(fmt = "Error while making request: Request error: {}", _0)]
+    #[display("Error while making request: Request error: {}", _0)]
     RequestError(reqwest::Error),
 
-    #[display(fmt = "No route returned by Bungee API")]
+    #[display("No route returned by Bungee API")]
     NoRouteError,
 }

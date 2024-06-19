@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use ruint::aliases::U256;
 
 pub use bungee::BungeeClient;
-use config;
 
 use crate::{CostType, Route};
 

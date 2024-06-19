@@ -1,6 +1,6 @@
 use redis;
-use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
 use redis::RedisError;
+use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
 use thiserror::Error;
 
 use config;

@@ -1,23 +1,23 @@
 [package]
-name = "storage"
+name = "routing-engine"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mongodb = "2.8.2"
-tokio = { version = "1.38.0", features = ["full"] }
-futures = "0.3.30"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.117"
 async-trait = "0.1.80"
-thiserror = "1.0"
+futures = "0.3.30"
+tokio = { version = "1.38.0", features = ["full"] }
 derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
-redis = { version = "0.25.4", features = ["aio", "tokio-comp"] }
+reqwest = "0.12.4"
+ruint = "1.12.3"
+linreg = "0.2.0"
 
 # workspace dependencies
+account-aggregation = { workspace = true }
+storage = { workspace = true }
 config = { workspace = true }
 
 [dev-dependencies]
-serial_test = "3.1.1"
-uuid = "1.8.0"
-
+mockall = "0.12.1"

@@ -2,9 +2,16 @@
 
 members = [
     "crates/config",
-    "crates/routing_engine",
+    "crates/routing-engine",
     "crates/api",
     "crates/storage",
-    "crates/account_aggregation",
+    "crates/account-aggregation",
     "bin/reflux"
 ]
+
+[workspace.dependencies]
+api = { path = "crates/api" }
+config = { path = "crates/config" }
+storage = { path = "crates/storage" }
+routing-engine = { path = "crates/routing-engine" }
+account-aggregation = { path = "crates/account-aggregation" }

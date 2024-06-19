@@ -1,17 +1,13 @@
-use std::cmp::PartialEq;
-use std::fmt::{Debug, Display};
-
+use config::config::BungeeConfig;
 use derive_more::{Display, From};
 use reqwest;
 use reqwest::header;
 use ruint::aliases::U256;
-use serde::{Deserialize, Serialize};
-use serde::de::StdError;
 
 use types::*;
 
-use crate::{CostType, Route};
 use crate::source::{Calldata, RouteSource};
+use crate::{CostType, Route};
 
 mod types;
 
@@ -23,7 +19,7 @@ pub struct BungeeClient {
 
 impl BungeeClient {
     pub(crate) fn new(
-        config::BungeeConfig { base_url, api_key }: &config::BungeeConfig,
+        BungeeConfig { base_url, api_key }: &BungeeConfig,
     ) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);
@@ -51,19 +47,19 @@ const ADDRESS_ZERO: &'static str = "0x0000000000000000000000000000000000000000";
 
 #[derive(Debug, Display, From)]
 pub enum BungeeFetchRouteCostError {
-    #[display(fmt = "Configuration Missing for token {} on chain {}", _1, _0)]
+    #[display("Configuration Missing for token {} on chain {}", _1, _0)]
     MissingChainForTokenInConfigError(u32, String),
 
-    #[display(fmt = "Error while making request: Request error: {}", _0)]
+    #[display("Error while making request: Request error: {}", _0)]
     BungeeClientError(BungeeClientError),
 
-    #[display(fmt = "Failure indicated in bungee response")]
+    #[display("Failure indicated in bungee response")]
     FailureIndicatedInResponseError(),
 
-    #[display(fmt = "No valid routes returned by Bungee API")]
+    #[display("No valid routes returned by Bungee API")]
     NoValidRouteError(),
 
-    #[display(fmt = "The estimation type {} is not implemented", _0)]
+    #[display("The estimation type {} is not implemented", _0)]
     EstimationTypeNotImplementedError(CostType),
 }
 
@@ -154,9 +150,9 @@ mod tests {
 
     use config::Config;
 
-    use crate::{CostType, Route};
-    use crate::source::{BungeeClient, RouteSource};
     use crate::source::bungee::types::GetQuoteRequest;
+    use crate::source::{BungeeClient, RouteSource};
+    use crate::{CostType, Route};
 
     fn setup() -> (Config, BungeeClient) {
         // let config = config::Config::from_file("../../config.yaml").unwrap();

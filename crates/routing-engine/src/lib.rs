@@ -1,14 +1,20 @@
-use derive_more::{Display, From};
-use ruint;
+// use route_fee_bucket::RouteFeeBucket;
+pub mod engine;
+pub mod route_fee_bucket;
+mod traits;
 
-use config;
-use config::BucketConfig;
+#[cfg(test)]
+mod tests;
+pub mod token_price;
+
+use derive_more::{Display, From};
+
+use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
 pub use indexer::Indexer;
 
 pub mod estimator;
 pub mod indexer;
 mod source;
-mod token_price;
 
 #[derive(Debug, Display)]
 enum CostType {
@@ -17,18 +23,15 @@ enum CostType {
 }
 
 pub struct Route<'a> {
-    from_chain: &'a config::ChainConfig,
-    to_chain: &'a config::ChainConfig,
-    from_token: &'a config::TokenConfig,
-    to_token: &'a config::TokenConfig,
+    from_chain: &'a ChainConfig,
+    to_chain: &'a ChainConfig,
+    from_token: &'a TokenConfig,
+    to_token: &'a TokenConfig,
     is_smart_contract_deposit: bool,
 }
 
 impl<'a> Route<'a> {
-    pub fn build(
-        bucket: &'a BucketConfig,
-        config: &'a config::Config,
-    ) -> Result<Route<'a>, RouteError> {
+    pub fn build(bucket: &'a BucketConfig, config: &'a Config) -> Result<Route<'a>, RouteError> {
         let from_chain = config.chains.get(&bucket.from_chain_id);
         if from_chain.is_none() {
             return Err(RouteError::ChainNotFoundError(bucket.from_chain_id));
@@ -61,9 +64,9 @@ impl<'a> Route<'a> {
 
 #[derive(Debug, Display, From)]
 enum RouteError {
-    #[display(fmt = "Chain not found while building route: {}", _0)]
+    #[display("Chain not found while building route: {}", _0)]
     ChainNotFoundError(u32),
 
-    #[display(fmt = "Token not found while building route: {}", _0)]
+    #[display("Token not found while building route: {}", _0)]
     TokenNotFoundError(String),
 }
