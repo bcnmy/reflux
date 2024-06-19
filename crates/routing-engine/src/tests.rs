@@ -1,10 +1,13 @@
-use mockall::predicate::*;
 use async_trait::async_trait;
+use mockall::predicate::*;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{engine::{Route, RoutingEngine}, traits::{AccountAggregation, RouteFee}};
+    use crate::{
+        engine::{Route, RoutingEngine},
+        traits::{AccountAggregation, RouteFee},
+    };
     use account_aggregation::types::Balance;
     use mockall::mock;
 
@@ -30,33 +33,31 @@ mod tests {
         let mut mock_aas = MockAccountAggregationService::new();
         let mut mock_rfb = MockRouteFeeBucket::new();
 
-        mock_aas
-            .expect_get_user_accounts_balance()
-            .returning(|_user_id| {
-                Ok(vec![
-                    Balance {
-                        token: "USDC".to_string(),
-                        token_address: "USDC".to_string(),
-                        chain_id: 137,
-                        amount: 50.0,
-                        amount_in_usd: 50.0,
-                    },
-                    Balance {
-                        token: "USDC".to_string(),
-                        token_address: "USDC".to_string(),
-                        chain_id: 42161,
-                        amount: 25.0,
-                        amount_in_usd: 25.0,
-                    },
-                    Balance {
-                        token: "ETH".to_string(),
-                        token_address: "ETH".to_string(),
-                        chain_id: 137,
-                        amount: 0.1,
-                        amount_in_usd: 200.0,
-                    },
-                ])
-            });
+        mock_aas.expect_get_user_accounts_balance().returning(|_user_id| {
+            Ok(vec![
+                Balance {
+                    token: "USDC".to_string(),
+                    token_address: "USDC".to_string(),
+                    chain_id: 137,
+                    amount: 50.0,
+                    amount_in_usd: 50.0,
+                },
+                Balance {
+                    token: "USDC".to_string(),
+                    token_address: "USDC".to_string(),
+                    chain_id: 42161,
+                    amount: 25.0,
+                    amount_in_usd: 25.0,
+                },
+                Balance {
+                    token: "ETH".to_string(),
+                    token_address: "ETH".to_string(),
+                    chain_id: 137,
+                    amount: 0.1,
+                    amount_in_usd: 200.0,
+                },
+            ])
+        });
 
         mock_rfb
             .expect_get_cost()

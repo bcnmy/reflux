@@ -23,5 +23,6 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run Tests
-        run: cargo test --all-features
+    env:
+      BUNGEE_API_KEY: ${{ secrets.BUNGEE_API_KEY }}
+    environment: Testing

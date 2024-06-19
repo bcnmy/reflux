@@ -5,12 +5,20 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.203", features = ["derive"] }
+serde_json = "1.0.117"
 async-trait = "0.1.80"
+futures = "0.3.30"
 tokio = { version = "1.38.0", features = ["full"] }
+derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
+reqwest = "0.12.4"
+ruint = "1.12.3"
+linreg = "0.2.0"
+thiserror = "1.0.61"
 
 # workspace dependencies
 account-aggregation = { workspace = true }
-derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
+storage = { workspace = true }
+config = { workspace = true }
 
 [dev-dependencies]
 mockall = "0.12.1"

@@ -8,10 +8,14 @@ mongodb = "2.8.2"
 tokio = { version = "1.38.0", features = ["full"] }
 futures = "0.3.30"
 serde = { version = "1.0.203", features = ["derive"] }
-async-trait = "0.1.80"
 serde_json = "1.0.117"
+async-trait = "0.1.80"
 thiserror = "1.0"
 derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
+redis = { version = "0.25.4", features = ["aio", "tokio-comp"] }
+
+# workspace dependencies
+config = { workspace = true }
 
 [dev-dependencies]
 serial_test = "3.1.1"

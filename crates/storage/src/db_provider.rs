@@ -1,6 +1,6 @@
+use crate::errors::DBError;
 use async_trait::async_trait;
 use mongodb::bson::Document;
-use crate::errors::DBError;
 
 #[async_trait]
 pub trait DBProvider {
