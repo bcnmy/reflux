@@ -91,7 +91,7 @@ impl<
 
                     Ok::<
                         estimator::DataPoint<f64, f64>,
-                        IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
+                        IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>,
                     >(estimator::DataPoint {
                         x: input_value_in_usd,
                         y: fee_in_usd,
@@ -102,7 +102,7 @@ impl<
             .collect::<Vec<
                 Result<
                     estimator::DataPoint<f64, f64>,
-                    IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
+                    IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>,
                 >,
             >>()
             .await
@@ -125,7 +125,7 @@ impl<
     >(
         &mut self,
         values: Vec<(&&BucketConfig, &Estimator)>,
-    ) -> Result<(), IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>> {
+    ) -> Result<(), IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>> {
         let values_transformed = values
             .iter()
             .map(|(k, v)| {
@@ -150,7 +150,7 @@ impl<
         &mut self,
     ) -> Result<
         HashMap<&'config BucketConfig, Estimator>,
-        IndexerErrors<TokenPriceProvider, RouteSource, ModelStore>,
+        IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>,
     > {
         // Build Estimators
         let estimator_map: HashMap<&BucketConfig, Estimator> =
@@ -189,6 +189,7 @@ enum IndexerErrors<
     T: token_price::TokenPriceProvider,
     S: source::RouteSource,
     R: storage::RoutingModelStore,
+    U: storage::MessageQueue,
 > {
     #[display(fmt = "Route build error: {}", _0)]
     RouteBuildError(RouteError),
@@ -206,7 +207,7 @@ enum IndexerErrors<
     PublishEstimatorErrors(Vec<R::Error>),
 
     #[display(fmt = "Indexer update message error: {}", _0)]
-    PublishIndexerUpdateMessageError(String),
+    PublishIndexerUpdateMessageError(U::Error),
 }
 
 #[cfg(test)]
@@ -246,11 +247,13 @@ mod tests {
 
     struct ProducerStub;
     impl MessageQueue for ProducerStub {
-        async fn publish(&mut self, topic: &str, message: &str) -> Result<(), String> {
+        type Error = ();
+
+        async fn publish(&mut self, topic: &str, message: &str) -> Result<(), ()> {
             Ok(())
         }
 
-        async fn subscribe(&mut self, topic: &str) -> Result<String, String> {
+        async fn subscribe(&mut self, topic: &str) -> Result<String, ()> {
             Ok("Subscribed".to_string())
         }
     }
