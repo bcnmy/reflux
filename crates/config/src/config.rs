@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -302,6 +302,9 @@ pub struct TokenConfig {
     // The token symbol
     #[validate(min_length = 1)]
     pub symbol: String,
+    // The symbol of the token in coingecko API
+    #[validate(min_length = 1)]
+    pub coingecko_symbol: String,
     // Whether the token across chains is supported
     pub is_enabled: bool,
     // Chain Specific Configuration
@@ -429,6 +432,7 @@ chains:
 tokens:
   - symbol: ETH
     is_enabled: true
+    coingecko_symbol: ethereum
     by_chain:
       1:
         is_enabled: true
@@ -440,6 +444,7 @@ tokens:
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
   - symbol: BNB
     is_enabled: true
+    coingecko_symbol: binancecoin
     by_chain:
       1:
         is_enabled: false
@@ -490,6 +495,7 @@ indexer_config:
 
         assert_eq!(config.tokens.len(), 2);
         assert_eq!(config.tokens["ETH"].symbol, "ETH");
+        assert_eq!(config.tokens["ETH"].coingecko_symbol, "ethereum");
         assert_eq!(config.tokens["ETH"].is_enabled, true);
         assert_eq!(config.tokens["ETH"].by_chain.len(), 2);
         assert_eq!(config.tokens["ETH"].by_chain[&1].decimals, 18);
@@ -504,7 +510,9 @@ indexer_config:
             "0x2170Ed0880ac9A755fd29B2688956BD959F933F8"
         );
         assert_eq!(config.tokens["ETH"].by_chain[&56].is_enabled, true);
+
         assert_eq!(config.tokens["BNB"].symbol, "BNB");
+        assert_eq!(config.tokens["BNB"].coingecko_symbol, "binancecoin");
         assert_eq!(config.tokens["BNB"].is_enabled, true);
         assert_eq!(config.tokens["BNB"].by_chain.len(), 2);
         assert_eq!(config.tokens["BNB"].by_chain[&1].decimals, 18);
@@ -597,6 +605,7 @@ chains:
 tokens:
   - symbol: ETH
     is_enabled: true
+    coingecko_symbol: ethereum
     by_chain:
       1:
         is_enabled: true
@@ -608,6 +617,7 @@ tokens:
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
   - symbol: ETH
     is_enabled: true
+    coingecko_symbol: ethereum
     by_chain:
       1:
         is_enabled: true

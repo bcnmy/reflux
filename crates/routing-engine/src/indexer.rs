@@ -14,14 +14,14 @@ const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
 pub struct Indexer<
     'config,
     Source: source::RouteSource,
-    ModelStore: storage::RoutingModelStore,
+    ModelStore: storage::KeyValueStore,
     Producer: storage::MessageQueue,
     TokenPriceProvider: token_price::TokenPriceProvider,
 > {
     config: &'config config::Config,
     source: &'config Source,
-    model_store: &'config mut ModelStore,
-    message_producer: &'config mut Producer,
+    model_store: &'config ModelStore,
+    message_producer: &'config Producer,
     token_price_provider: &'config TokenPriceProvider,
 }
 
@@ -30,16 +30,16 @@ const POINTS_COUNT_PER_BUCKET: u8 = 10;
 impl<
         'config,
         RouteSource: source::RouteSource,
-        ModelStore: storage::RoutingModelStore,
+        ModelStore: storage::KeyValueStore,
         Producer: storage::MessageQueue,
         TokenPriceProvider: token_price::TokenPriceProvider,
     > Indexer<'config, RouteSource, ModelStore, Producer, TokenPriceProvider>
 {
-    fn new(
+    pub fn new(
         config: &'config config::Config,
         source: &'config RouteSource,
-        model_store: &'config mut ModelStore,
-        message_producer: &'config mut Producer,
+        model_store: &'config ModelStore,
+        message_producer: &'config Producer,
         token_price_provider: &'config TokenPriceProvider,
     ) -> Self {
         Indexer { config, source, model_store, message_producer, token_price_provider }
@@ -74,7 +74,7 @@ impl<
                             self.token_price_provider,
                             &bucket.from_token,
                             bucket.from_chain_id,
-                            input_value_in_usd,
+                            &input_value_in_usd,
                         )
                         .await
                         .map_err(|err| IndexerErrors::TokenPriceProviderError(err))?;
@@ -122,7 +122,7 @@ impl<
         'est_de,
         Estimator: estimator::Estimator<'est_de, f64, f64>,
     >(
-        &mut self,
+        &self,
         values: Vec<(&&BucketConfig, &Estimator)>,
     ) -> Result<(), IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>> {
         let values_transformed = values
@@ -146,7 +146,7 @@ impl<
     }
 
     pub async fn run<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>>(
-        &mut self,
+        &self,
     ) -> Result<
         HashMap<&'config BucketConfig, Estimator>,
         IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer>,
@@ -187,7 +187,7 @@ impl<
 enum IndexerErrors<
     T: token_price::TokenPriceProvider,
     S: source::RouteSource,
-    R: storage::RoutingModelStore,
+    R: storage::KeyValueStore,
     U: storage::MessageQueue,
 > {
     #[display("Route build error: {}", _0)]
@@ -214,8 +214,11 @@ mod tests {
     use std::env;
     use std::fmt::Error;
 
+    use derive_more::Display;
+    use thiserror::Error;
+
     use config::Config;
-    use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
+    use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
 
     use crate::CostType;
     use crate::estimator::{Estimator, LinearRegressionEstimator};
@@ -223,38 +226,41 @@ mod tests {
     use crate::source::BungeeClient;
     use crate::token_price::TokenPriceProvider;
 
+    #[derive(Error, Display, Debug)]
+    struct Err;
+
     #[derive(Debug)]
     struct ModelStoreStub;
-    impl RoutingModelStore for ModelStoreStub {
-        type Error = ();
+    impl KeyValueStore for ModelStoreStub {
+        type Error = Err;
 
-        async fn get(&mut self, k: &String) -> Result<String, Self::Error> {
+        async fn get(&self, k: &String) -> Result<String, Self::Error> {
             Ok("Get".to_string())
         }
 
-        async fn get_multiple(&mut self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+        async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
             Ok(vec!["Get".to_string(); k.len()])
         }
 
-        async fn set(&mut self, k: &String, v: &String) -> Result<(), Self::Error> {
+        async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        async fn set_multiple(&mut self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
             Ok(())
         }
     }
 
     struct ProducerStub;
     impl MessageQueue for ProducerStub {
-        type Error = ();
+        type Error = Err;
 
-        async fn publish(&mut self, topic: &str, message: &str) -> Result<(), ()> {
+        async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn subscribe<String>(
-            &mut self,
+            &self,
             topic: &str,
             callback: impl FnMut(Msg) -> ControlFlow<String>,
         ) -> Result<(), Self::Error> {
@@ -286,6 +292,7 @@ chains:
 tokens:
   - symbol: USDC
     is_enabled: true
+    coingecko_symbol: usd-coin
     by_chain:
       1:
         is_enabled: true
@@ -324,7 +331,7 @@ covalent:
   base_url: 'https://api.bungee.exchange'
   api_key: 'my-api'
 coingecko:
-  base_url: 'https://api.coingecko.com'
+  base_url: 'https://api.coingecko.com/api/v3'
   api_key: 'my-api'
 infra:
   redis_url: 'redis://localhost:6379'
@@ -353,14 +360,19 @@ indexer_config:
 
     #[tokio::test]
     async fn test_build_estimator() {
-        let (config, bungee_client, mut model_store, mut message_producer, token_price_provider) =
-            setup();
-        let indexer = Indexer::new(
+        let (
+            config,
+            bungee_client,
+            mut model_store,
+            mut message_producer,
+            mut token_price_provider,
+        ) = setup();
+        let mut indexer = Indexer::new(
             &config,
             &bungee_client,
             &mut model_store,
             &mut message_producer,
-            &token_price_provider,
+            &mut token_price_provider,
         );
 
         let estimator = indexer.build_estimator(&config.buckets[0], &CostType::Fee).await;

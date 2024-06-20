@@ -1,4 +1,4 @@
-use derive_more::{Display, From};
+use derive_more::Display;
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
@@ -11,18 +11,18 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
     token_price_provider: &'config T,
     token_symbol: &'config String,
     chain_id: u32,
-    value_in_usd: f64,
+    value_in_usd: &f64,
 ) -> Result<U256, Errors<T::Error>> {
-    let token_price = token_price_provider
-        .get_token_price(token_symbol)
-        .await
-        .map_err(Errors::<T::Error>::TokenPriceProviderError)?;
-
     let token_config = config.tokens.get(token_symbol);
     if token_config.is_none() {
         return Err(Errors::TokenConfigurationNotFound(token_symbol.clone()));
     }
     let token_config = token_config.unwrap();
+
+    let token_price = token_price_provider
+        .get_token_price(&token_config.coingecko_symbol)
+        .await
+        .map_err(Errors::<T::Error>::TokenPriceProviderError)?;
 
     let token_config_by_chain = token_config.by_chain.get(&chain_id);
     if token_config_by_chain.is_none() {
@@ -39,7 +39,7 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
 }
 
 #[derive(Debug, Error)]
-pub(crate) enum Errors<T: Display> {
+pub enum Errors<T: Display> {
     #[error("Token price provider error: {}", _0)]
     TokenPriceProviderError(#[from] T),
 
@@ -69,6 +69,7 @@ chains:
     is_enabled: true
 tokens:
   - symbol: USDC
+    coingecko_symbol: usd-coin
     is_enabled: true
     by_chain:
       1:
@@ -83,7 +84,7 @@ covalent:
   base_url: 'https://api.bungee.exchange'
   api_key: 'my-api'
 coingecko:
-  base_url: 'https://api.coingecko.com'
+  base_url: 'https://api.coingecko.com/api/v3'
   api_key: 'my-api'
 infra:
   redis_url: 'redis://localhost:6379'
@@ -115,7 +116,7 @@ indexer_config:
     #[tokio::test]
     async fn test_get_token_amount_from_value_in_usd() {
         let config = setup();
-        let token_price_provider = TokenPriceProviderStub;
+        let mut token_price_provider = TokenPriceProviderStub;
 
         let token_symbol = String::from("USDC");
         let chain_id = 1;
@@ -123,10 +124,10 @@ indexer_config:
 
         let result = super::get_token_amount_from_value_in_usd(
             &config,
-            &token_price_provider,
+            &mut token_price_provider,
             &token_symbol,
             chain_id,
-            value_in_usd,
+            &value_in_usd,
         )
         .await;
 

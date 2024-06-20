@@ -8,6 +8,7 @@ chains:
 tokens:
   - symbol: ETH
     is_enabled: true
+    coingecko_symbol: ethereum
     by_chain:
       1:
         is_enabled: true
@@ -19,6 +20,7 @@ tokens:
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
   - symbol: BNB
     is_enabled: true
+    coingecko_symbol: binancecoin
     by_chain:
       1:
         is_enabled: false

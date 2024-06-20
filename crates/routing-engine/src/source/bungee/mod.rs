@@ -18,7 +18,7 @@ pub struct BungeeClient {
 }
 
 impl BungeeClient {
-    pub(crate) fn new(
+    pub fn new(
         BungeeConfig { base_url, api_key }: &BungeeConfig,
     ) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
@@ -168,6 +168,7 @@ chains:
 tokens:
   - symbol: USDC
     is_enabled: true
+    coingecko_symbol: usd-coin
     by_chain:
       1:
         is_enabled: true
@@ -192,7 +193,7 @@ covalent:
   base_url: 'https://api.bungee.exchange'
   api_key: 'my-api'
 coingecko:
-  base_url: 'https://api.coingecko.com'
+  base_url: 'https://api.coingecko.com/api/v3'
   api_key: 'my-api'
 infra:
   redis_url: 'redis://localhost:6379'

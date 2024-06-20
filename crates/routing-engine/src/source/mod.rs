@@ -6,7 +6,7 @@ pub use bungee::BungeeClient;
 
 use crate::{CostType, Route};
 
-mod bungee;
+pub mod bungee;
 
 type Calldata = String;
 

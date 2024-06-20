@@ -3,15 +3,15 @@ use thiserror::Error;
 
 use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
 pub use indexer::Indexer;
+pub use source::bungee::BungeeClient;
+pub use token_price::CoingeckoClient;
 
-// use route_fee_bucket::RouteFeeBucket;
 pub mod engine;
 pub mod route_fee_bucket;
-mod traits;
-
 #[cfg(test)]
 mod tests;
 pub mod token_price;
+mod traits;
 
 pub mod estimator;
 pub mod indexer;

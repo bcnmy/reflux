@@ -1,58 +1,67 @@
+use std::cell::RefCell;
+
 use redis;
-use redis::RedisError;
 use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
+use redis::RedisError;
 use thiserror::Error;
 
 use config;
 
-use crate::{MessageQueue, RoutingModelStore};
+use crate::{KeyValueStore, MessageQueue};
 
-struct RedisClient {
-    client: redis::Client,
-    connection: aio::MultiplexedConnection,
+#[derive(Debug)]
+pub struct RedisClient {
+    client: RefCell<redis::Client>,
+    connection: RefCell<aio::MultiplexedConnection>,
 }
 
 impl RedisClient {
     pub async fn build(redis_url: &String) -> Result<Self, RedisClientError> {
-        let client = redis::Client::open(redis_url.clone())?;
-        let connection = client.get_multiplexed_async_connection().await?;
+        let client = RefCell::new(redis::Client::open(redis_url.clone())?);
+        let connection =
+            RefCell::new(client.borrow_mut().get_multiplexed_async_connection().await?);
         Ok(RedisClient { client, connection })
     }
 }
 
-impl RoutingModelStore for RedisClient {
+impl KeyValueStore for RedisClient {
     type Error = RedisClientError;
 
-    async fn get(&mut self, k: &String) -> Result<String, Self::Error> {
-        self.connection.get(k).await.map_err(RedisClientError::RedisLibraryError)
+    // Todo: This should return an option
+    async fn get(&self, k: &String) -> Result<String, Self::Error> {
+        self.connection.borrow_mut().get(k).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn get_multiple(&mut self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
-        self.connection.mget(k).await.map_err(RedisClientError::RedisLibraryError)
+    async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+        self.connection.borrow_mut().mget(k).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn set(&mut self, k: &String, v: &String) -> Result<(), Self::Error> {
-        self.connection.set(k, v).await.map_err(RedisClientError::RedisLibraryError)
+    async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error> {
+        self.connection.borrow_mut().set(k, v).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn set_multiple(&mut self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
-        self.connection.mset(kv).await.map_err(RedisClientError::RedisLibraryError)
+    async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        self.connection.borrow_mut().mset(kv).await.map_err(RedisClientError::RedisLibraryError)
     }
 }
 
 impl MessageQueue for RedisClient {
     type Error = RedisClientError;
 
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error> {
-        self.connection.publish(topic, message).await.map_err(RedisClientError::RedisLibraryError)
+    async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        self.connection
+            .borrow_mut()
+            .publish(topic, message)
+            .await
+            .map_err(RedisClientError::RedisLibraryError)
     }
 
     fn subscribe<U>(
-        &mut self,
+        &self,
         topic: &str,
         callback: impl FnMut(Msg) -> ControlFlow<U>,
     ) -> Result<(), Self::Error> {
-        let mut connection = self.client.get_connection()?;
+        let mut connection = self.client.borrow_mut().get_connection()?;
         connection.subscribe(topic, callback)?;
         Ok(())
     }
@@ -79,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_store() {
-        let mut client = setup().await;
+        let client = setup().await;
 
         let keys = vec!["test_key1".to_string(), "test_key2".to_string()];
         let values = vec!["test_value1".to_string(), "test_value2".to_string()];
@@ -114,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn test_pub_sub() {
         let (tx, mut rx) = channel::<String>();
-        let mut client = setup().await;
+        let client = setup().await;
 
         tokio::task::spawn_blocking(move || {
             client
