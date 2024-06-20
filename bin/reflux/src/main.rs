@@ -15,6 +15,7 @@ async fn main() {
     let config = Config::from_file("config.yaml").expect("Failed to load config file");
     let mongodb_uri = config.infra.mongo_url;
     let (app_host, app_port) = (config.server.host, config.server.port);
+    info!("Starting server at {}:{}", app_host, app_port);
 
     // Instance of MongoDBProvider for users and account mappings
     let user_db_provider =
@@ -41,7 +42,8 @@ async fn main() {
     );
 
     // Initialize routing engine
-    let routing_engine = RoutingEngine::new(account_service.clone());
+    let buckets = config.buckets;
+    let routing_engine = RoutingEngine::new(account_service.clone(), buckets);
 
     // API service controller
     let service_controller = ServiceController::new(account_service, routing_engine);

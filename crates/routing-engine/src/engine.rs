@@ -1,54 +1,57 @@
-use crate::route_fee_bucket::RouteFeeBucket;
 use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
+use config::config::BucketConfig;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
+
+use crate::estimator::{Estimator, LinearRegressionEstimator};
 
 #[derive(Serialize, Deserialize, Debug, Display, PartialEq, Clone)]
 #[display(
-    "Route: from_chain: {}, to_chain: {}, token: {}, amount: {}, path: {:?}",
+    "Route: from_chain: {}, to_chain: {}, token: {}, amount: {}",
     from_chain,
     to_chain,
     token,
-    amount,
-    path
+    amount
 )]
 pub struct Route {
     pub from_chain: u32,
     pub to_chain: u32,
     pub token: String,
     pub amount: f64,
-    pub path: Vec<String>,
 }
 
+/// (from_chain, to_chain, from_token, to_token)
+struct PathQuery(u32, u32, String, String);
+
 // Todo: Define the following structs
-pub struct RouteSource;
-pub struct RouteBucketConfig;
-pub struct Estimator;
-pub struct EngineStore;
-pub struct MessageConsumer;
+// pub struct RouteSource;
+// pub struct Estimator;
+// pub struct EngineStore;
+// pub struct MessageConsumer;
 
 pub struct RoutingEngine {
     // route_sources: Vec<RouteSource>,
     // route_bucket_config: Vec<RouteBucketConfig>,
-    // buckets: Vec<RouteFeeBucket>,
+    buckets: Vec<BucketConfig>,
     // estimators: HashMap<String, Estimator>, // Concatenation of EstimatorType and RouteBucketConfig
     // engine_store: EngineStore,
     // message_consumer: MessageConsumer,
     aas_client: AccountAggregationService,
     // db_provider: Arc<dyn DBProvider + Send + Sync>,
     // settlement_engine: SettlementEngineClient,
-    _cache: Arc<HashMap<String, (f64, f64, String)>>, // (key, (fee, quote, bridge_name))
-    route_fee_bucket: RouteFeeBucket,
+    cache: Arc<HashMap<String, String>>, // (hash(bucket), hash(estimator_value)
 }
 
 impl RoutingEngine {
-    pub fn new(aas_client: AccountAggregationService) -> Self {
+    pub fn new(aas_client: AccountAggregationService, buckets: Vec<BucketConfig>) -> Self {
         let cache = Arc::new(HashMap::new());
-        let route_fee_bucket = RouteFeeBucket::new();
-        Self { aas_client, _cache: cache, route_fee_bucket }
+
+        Self { aas_client, cache, buckets }
     }
 
     /// Get the best cost path for a user
@@ -70,21 +73,24 @@ impl RoutingEngine {
         // todo: for account aggregation, transfer same chain same asset first
         let direct_assets: Vec<_> =
             user_balances.iter().filter(|balance| balance.token == to_token).collect();
-        println!("\n ---Direct assets: {:?}\n", direct_assets);
+        println!("\nDirect assets: {:?}\n", direct_assets);
 
         // Sort direct assets by A^x / C^y, here x=2 and y=1
         let x = 2.0;
         let y = 1.0;
-        let mut sorted_assets: Vec<_> = direct_assets
+        let mut sorted_assets: Vec<(&&Balance, f64)> = direct_assets
             .iter()
             .map(|balance| {
-                let (fee, quote, bridge_name) = self.route_fee_bucket.get_cost(
-                    balance.chain_id,
-                    to_chain,
-                    &balance.token,
-                    to_token,
+                let fee_cost = self.get_cached_data(
+                    balance.amount_in_usd, // todo: edit
+                    PathQuery(
+                        balance.chain_id,
+                        to_chain,
+                        balance.token.to_string(),
+                        to_token.to_string(),
+                    ),
                 );
-                (balance, fee, quote, bridge_name)
+                (balance, fee_cost)
             })
             .collect();
 
@@ -98,7 +104,7 @@ impl RoutingEngine {
         let mut total_amount_needed = to_value;
         let mut selected_assets: Vec<Route> = Vec::new();
 
-        for (balance, fee, _quote, bridge_name) in sorted_assets {
+        for (balance, fee) in sorted_assets {
             println!(
                 "total_amount_needed: {}, balance.amount: {}, fee: {}",
                 total_amount_needed, balance.amount, fee
@@ -121,57 +127,98 @@ impl RoutingEngine {
                 to_chain,
                 token: balance.token.clone(),
                 amount: amount_to_take,
-                path: vec![bridge_name.clone()],
             });
         }
 
-        // Handle swap/bridge for remaining amount if needed
+        // Handle swap/bridge for remaining amount if needed (non direct assets)
         if total_amount_needed > 0.0 {
-            let mut swap_assets: Vec<_> =
+            let swap_assets: Vec<&Balance> =
                 user_balances.iter().filter(|balance| balance.token != to_token).collect();
-            swap_assets.sort_by(|a, b| {
-                // let key_a = format!("{}_{}_{}_{}", a.chain_id, to_chain, &a.token, to_token);
-                // let key_b = format!("{}_{}_{}_{}", b.chain_id, to_chain, &b.token, to_token);
-                let (fee_a, quote_a, _) =
-                    self.route_fee_bucket.get_cost(a.chain_id, to_chain, &a.token, to_token);
-                let (fee_b, quote_b, _) =
-                    self.route_fee_bucket.get_cost(b.chain_id, to_chain, &b.token, to_token);
-                let cost_a = (quote_a.powf(x)) / (fee_a.powf(y));
-                let cost_b = (quote_b.powf(x)) / (fee_b.powf(y));
+            let mut sorted_assets: Vec<(&&Balance, f64)> = swap_assets
+                .iter()
+                .map(|balance| {
+                    let fee_cost = self.get_cached_data(
+                        balance.amount_in_usd,
+                        PathQuery(
+                            balance.chain_id,
+                            to_chain,
+                            balance.token.clone(),
+                            to_token.to_string(),
+                        ),
+                    );
+                    (balance, fee_cost)
+                })
+                .collect();
+
+            sorted_assets.sort_by(|a, b| {
+                let cost_a = (a.0.amount.powf(x)) / (a.1.powf(y));
+                let cost_b = (b.0.amount.powf(x)) / (b.1.powf(y));
                 cost_a.partial_cmp(&cost_b).unwrap()
             });
 
-            for balance in swap_assets {
+            for (balance, fee_cost) in sorted_assets {
                 if total_amount_needed <= 0.0 {
                     break;
                 }
 
-                let (fee, quote, bridge_name) = self.route_fee_bucket.get_cost(
-                    balance.chain_id,
-                    to_chain,
-                    &balance.token,
-                    to_token,
-                );
-                let amount_to_take =
-                    if quote >= total_amount_needed { total_amount_needed } else { quote };
+                let amount_to_take = if balance.amount_in_usd >= total_amount_needed {
+                    total_amount_needed
+                } else {
+                    balance.amount_in_usd
+                };
 
                 total_amount_needed -= amount_to_take;
-                total_cost += fee;
+                total_cost += fee_cost;
 
                 selected_assets.push(Route {
                     from_chain: balance.chain_id,
                     to_chain,
                     token: balance.token.clone(),
                     amount: amount_to_take,
-                    path: vec![bridge_name.clone()],
                 });
             }
         }
 
-        println!("\n ---Selected assets path: {:?}", selected_assets);
+        println!("\n Selected assets path: {:?}", selected_assets);
         println!("Total cost: {}", total_cost);
 
         selected_assets
+    }
+
+    fn get_cached_data(&self, target_amount: f64, path: PathQuery) -> f64 {
+        // filter the bucket of (chain, token) and sort with token_amount_from_usd
+        let mut buckets_array: Vec<BucketConfig> = self
+            .buckets
+            .clone()
+            .into_iter()
+            .filter(|bucket| {
+                bucket.from_chain_id == path.0
+                    && bucket.to_chain_id == path.1
+                    && bucket.from_token == path.2
+                    && bucket.to_token == path.3
+            })
+            .collect();
+        buckets_array.sort();
+
+        let bucket = buckets_array.iter().find(|window| {
+            target_amount >= window.token_amount_from_usd
+                && target_amount <= window.token_amount_to_usd
+        });
+
+        // todo: should throw error if not found in bucket range or unwrap or with last bucket
+        let mut s = DefaultHasher::new();
+        bucket.hash(&mut s);
+        let key = s.finish().to_string();
+
+        let value = self.cache.get(&key).unwrap();
+
+        let estimator: Result<LinearRegressionEstimator, serde_json::Error> =
+            serde_json::from_str(value);
+
+        let cost = estimator.unwrap().borrow().estimate(target_amount);
+        println!("Cost for the target_amount {}", cost);
+
+        cost
     }
 
     /// Get user balance from account aggregation service

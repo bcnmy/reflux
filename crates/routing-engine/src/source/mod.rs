@@ -2,8 +2,6 @@ use std::fmt::Debug;
 
 use ruint::aliases::U256;
 
-pub use bungee::BungeeClient;
-
 use crate::{CostType, Route};
 
 mod bungee;

@@ -6,7 +6,7 @@ use futures::stream::StreamExt;
 
 use config::config::BucketConfig;
 
-use crate::{CostType, estimator, Route, RouteError, source, token_price};
+use crate::{estimator, source, token_price, CostType, Route, RouteError};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -214,14 +214,12 @@ mod tests {
     use std::env;
     use std::fmt::Error;
 
-    use config::Config;
-    use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
-
-    use crate::CostType;
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
-    use crate::source::BungeeClient;
-    use crate::token_price::TokenPriceProvider;
+    use crate::CostType;
+    use crate::{source::BungeeClient, token_price::TokenPriceProvider};
+    use config::Config;
+    use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
 
     #[derive(Debug)]
     struct ModelStoreStub;

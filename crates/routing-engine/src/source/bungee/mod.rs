@@ -136,7 +136,7 @@ impl RouteSource for BungeeClient {
 
     async fn generate_route_calldata(
         &self,
-        route: &Route<'_>,
+        _route: &Route<'_>,
     ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
         todo!()
     }
@@ -151,7 +151,7 @@ mod tests {
     use config::Config;
 
     use crate::{CostType, Route};
-    use crate::source::{BungeeClient, RouteSource};
+    use crate::source::bungee::BungeeClient;
     use crate::source::bungee::types::GetQuoteRequest;
 
     fn setup() -> (Config, BungeeClient) {

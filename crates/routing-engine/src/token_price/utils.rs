@@ -1,4 +1,4 @@
-use derive_more::{Display, From};
+use derive_more::Display;
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;

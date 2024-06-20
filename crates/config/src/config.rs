@@ -230,7 +230,7 @@ pub struct RawConfig {
     pub indexer_config: IndexerConfig,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, PartialOrd, Clone)]
 pub struct BucketConfig {
     // The source chain
     #[validate(minimum = 1)]
@@ -252,6 +252,13 @@ pub struct BucketConfig {
     // Upper bound of the token amount to be transferred from the source chain to the destination chain
     #[validate(minimum = 1.0)]
     pub token_amount_to_usd: f64,
+}
+
+impl Ord for BucketConfig {
+    // sort with token_amount_from_usd
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.token_amount_from_usd.partial_cmp(&other.token_amount_from_usd).unwrap()
+    }
 }
 
 // Implementation for treating a BucketConfig as a key in a k-v pair
