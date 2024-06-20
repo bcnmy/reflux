@@ -200,10 +200,13 @@ impl RoutingEngine {
             .collect();
         buckets_array.sort();
 
-        let bucket = buckets_array.iter().find(|window| {
-            target_amount >= window.token_amount_from_usd
-                && target_amount <= window.token_amount_to_usd
-        });
+        let bucket = buckets_array
+            .iter()
+            .find(|window| {
+                target_amount >= window.token_amount_from_usd
+                    && target_amount <= window.token_amount_to_usd
+            })
+            .unwrap();
 
         // todo: should throw error if not found in bucket range or unwrap or with last bucket
         let mut s = DefaultHasher::new();
@@ -225,5 +228,86 @@ impl RoutingEngine {
     async fn get_user_balance_from_agg_service(&self, account: &str) -> Vec<Balance> {
         // Note: aas should always return vec of balances
         self.aas_client.get_user_accounts_balance(&account.to_string()).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use storage::mongodb_provider::MongoDBProvider;
+
+    use crate::estimator::DataPoint;
+
+    use super::*;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_get_cached_data() {
+        // Create dummy buckets
+        let buckets = vec![
+            BucketConfig {
+                from_chain_id: 1,
+                to_chain_id: 2,
+                from_token: "USDC".to_string(),
+                to_token: "ETH".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 1.0,
+                token_amount_to_usd: 10.0,
+            },
+            BucketConfig {
+                from_chain_id: 1,
+                to_chain_id: 2,
+                from_token: "USDC".to_string(),
+                to_token: "ETH".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 10.0,
+                token_amount_to_usd: 100.0,
+            },
+        ];
+
+        // Create a dummy estimator and serialize it
+        let dummy_estimator = LinearRegressionEstimator::build(vec![
+            DataPoint { x: 0.0, y: 0.0 },
+            DataPoint { x: 1.0, y: 1.0 },
+            DataPoint { x: 2.0, y: 2.0 },
+        ])
+        .unwrap();
+        let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
+
+        // Create a cache with a dummy bucket
+        let mut hasher = DefaultHasher::new();
+        buckets[0].hash(&mut hasher);
+        let key = hasher.finish().to_string();
+        let mut cache = HashMap::new();
+        cache.insert(key, serialized_estimator);
+
+        // Create RoutingEngine instance with dummy data
+        let user_db_provider = MongoDBProvider::new(
+            "mongodb://localhost:27017",
+            "test".to_string(),
+            "test".to_string(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        let routing_engine = RoutingEngine {
+            aas_client: AccountAggregationService::new(
+                user_db_provider.clone(),
+                user_db_provider.clone(),
+                "https://api.covalent.com".to_string(),
+                "my-api".to_string(),
+            ),
+            buckets,
+            cache: Arc::new(cache),
+        };
+
+        // Define the target amount and path query
+        let target_amount = 5.0;
+        let path_query = PathQuery(1, 2, "USDC".to_string(), "ETH".to_string());
+
+        // Call get_cached_data and assert the result
+        let result = routing_engine.get_cached_data(target_amount, path_query);
+        assert!(result > 0.0);
+        assert_eq!(result, dummy_estimator.estimate(target_amount));
     }
 }

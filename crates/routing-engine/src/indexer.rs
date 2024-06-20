@@ -216,8 +216,9 @@ mod tests {
 
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
+    use crate::source::bungee::BungeeClient;
+    use crate::token_price::TokenPriceProvider;
     use crate::CostType;
-    use crate::{source::BungeeClient, token_price::TokenPriceProvider};
     use config::Config;
     use storage::{ControlFlow, MessageQueue, Msg, RoutingModelStore};
 

@@ -4,7 +4,7 @@ use ruint::aliases::U256;
 
 use crate::{CostType, Route};
 
-mod bungee;
+pub mod bungee;
 
 type Calldata = String;
 

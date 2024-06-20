@@ -150,6 +150,7 @@ mod tests {
 
     use config::Config;
 
+    use crate::source::RouteSource;
     use crate::{CostType, Route};
     use crate::source::bungee::BungeeClient;
     use crate::source::bungee::types::GetQuoteRequest;

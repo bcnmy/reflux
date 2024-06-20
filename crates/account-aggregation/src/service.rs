@@ -11,6 +11,11 @@ use storage::db_provider::DBProvider;
 use storage::mongodb_provider::MongoDBProvider;
 use uuid::Uuid;
 
+/// Account Aggregation Service
+///
+/// This service is responsible for managing user accounts and their balances
+/// It interacts with the user and account mapping databases to store and retrieve user account information
+
 #[derive(Clone, Display, Debug)]
 #[display(
     "AccountAggregationService {{ user_db_provider: {:?}, account_mapping_db_provider: {:?} }}",
