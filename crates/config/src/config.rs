@@ -302,6 +302,9 @@ pub struct ChainConfig {
     pub name: String,
     // If the chain is enabled or now
     pub is_enabled: bool,
+    // The name of the chain in Covalent API
+    #[validate(min_length = 1)]
+    pub covalent_name: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -429,10 +432,12 @@ mod tests {
 chains:
   - id: 1
     name: Ethereum
+    covalent_name: eth-mainnet
     is_enabled: true
   - id: 56
     name: Binance Smart Chain
     is_enabled: true
+    covalent_name: bsc-mainnet
 tokens:
   - symbol: ETH
     is_enabled: true
@@ -491,9 +496,11 @@ indexer_config:
         assert_eq!(config.chains[&1].id, 1);
         assert_eq!(config.chains[&1].name, "Ethereum");
         assert_eq!(config.chains[&1].is_enabled, true);
+        assert_eq!(config.chains[&1].covalent_name, "eth-mainnet");
         assert_eq!(config.chains[&56].id, 56);
         assert_eq!(config.chains[&56].name, "Binance Smart Chain");
         assert_eq!(config.chains[&56].is_enabled, true);
+        assert_eq!(config.chains[&56].covalent_name, "bsc-mainnet");
 
         assert_eq!(config.tokens.len(), 2);
         assert_eq!(config.tokens["ETH"].symbol, "ETH");
@@ -557,9 +564,11 @@ chains:
   - id: 1
     name: Ethereum
     is_enabled: true
+    covalent_name: eth-mainnet
   - id: 1
     name: Ethereum
     is_enabled: true
+    covalent_name: eth-mainnet
 tokens:
 buckets:
 bungee:
@@ -586,6 +595,7 @@ indexer_config:
 
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+                println!("{:?}", err);
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"chains\":{\"errors\":[\"The items must be unique.\"]}}}";
 

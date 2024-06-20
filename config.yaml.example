@@ -1,10 +1,12 @@
 chains:
   - id: 1
     name: Ethereum
+    covalent_name: eth-mainnet
     is_enabled: true
   - id: 56
     name: Binance Smart Chain
     is_enabled: true
+    covalent_name: bsc-mainnet
 tokens:
   - symbol: ETH
     is_enabled: true

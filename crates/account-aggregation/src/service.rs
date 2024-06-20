@@ -28,6 +28,7 @@ pub struct AccountAggregationService {
     covalent_base_url: String,
     covalent_api_key: String,
     client: ReqwestClient,
+    networks: Vec<String>,
 }
 
 impl AccountAggregationService {
@@ -35,6 +36,7 @@ impl AccountAggregationService {
     pub fn new(
         user_db_provider: MongoDBProvider,
         account_mapping_db_provider: MongoDBProvider,
+        networks: Vec<String>,
         base_url: String,
         api_key: String,
     ) -> Self {
@@ -46,6 +48,7 @@ impl AccountAggregationService {
             covalent_base_url: base_url,
             covalent_api_key: api_key,
             client: reqwest_client,
+            networks,
         }
     }
 
@@ -187,7 +190,7 @@ impl AccountAggregationService {
         }
 
         let mut balances = Vec::new();
-        let networks = ["matic-mainnet", "base-mainnet", "arbitrum-mainnet", "optimism-mainnet"];
+        let networks = self.networks.clone();
 
         // todo: parallelize this
         for user in accounts.iter() {

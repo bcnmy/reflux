@@ -67,6 +67,7 @@ chains:
   - id: 1
     name: Ethereum
     is_enabled: true
+    covalent_name: 'eth-mainnet'
 tokens:
   - symbol: USDC
     is_enabled: true

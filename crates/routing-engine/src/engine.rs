@@ -26,24 +26,12 @@ pub struct Route {
 }
 
 /// (from_chain, to_chain, from_token, to_token)
+#[derive(Debug)]
 struct PathQuery(u32, u32, String, String);
 
-// Todo: Define the following structs
-// pub struct RouteSource;
-// pub struct Estimator;
-// pub struct EngineStore;
-// pub struct MessageConsumer;
-
 pub struct RoutingEngine {
-    // route_sources: Vec<RouteSource>,
-    // route_bucket_config: Vec<RouteBucketConfig>,
     buckets: Vec<BucketConfig>,
-    // estimators: HashMap<String, Estimator>, // Concatenation of EstimatorType and RouteBucketConfig
-    // engine_store: EngineStore,
-    // message_consumer: MessageConsumer,
     aas_client: AccountAggregationService,
-    // db_provider: Arc<dyn DBProvider + Send + Sync>,
-    // settlement_engine: SettlementEngineClient,
     cache: Arc<HashMap<String, String>>, // (hash(bucket), hash(estimator_value)
 }
 
@@ -73,7 +61,7 @@ impl RoutingEngine {
         // todo: for account aggregation, transfer same chain same asset first
         let direct_assets: Vec<_> =
             user_balances.iter().filter(|balance| balance.token == to_token).collect();
-        println!("\nDirect assets: {:?}\n", direct_assets);
+        // println!("\nDirect assets: {:?}\n", direct_assets);
 
         // Sort direct assets by A^x / C^y, here x=2 and y=1
         let x = 2.0;
@@ -105,20 +93,14 @@ impl RoutingEngine {
         let mut selected_assets: Vec<Route> = Vec::new();
 
         for (balance, fee) in sorted_assets {
-            println!(
-                "total_amount_needed: {}, balance.amount: {}, fee: {}",
-                total_amount_needed, balance.amount, fee
-            );
             if total_amount_needed <= 0.0 {
                 break;
             }
-
             let amount_to_take = if balance.amount >= total_amount_needed {
                 total_amount_needed
             } else {
                 balance.amount
             };
-
             total_amount_needed -= amount_to_take;
             total_cost += fee;
 
@@ -212,14 +194,11 @@ impl RoutingEngine {
         let mut s = DefaultHasher::new();
         bucket.hash(&mut s);
         let key = s.finish().to_string();
-
         let value = self.cache.get(&key).unwrap();
-
         let estimator: Result<LinearRegressionEstimator, serde_json::Error> =
             serde_json::from_str(value);
 
         let cost = estimator.unwrap().borrow().estimate(target_amount);
-        println!("Cost for the target_amount {}", cost);
 
         cost
     }
@@ -233,12 +212,21 @@ impl RoutingEngine {
 
 #[cfg(test)]
 mod tests {
-    use storage::mongodb_provider::MongoDBProvider;
-
-    use crate::estimator::DataPoint;
-
-    use super::*;
+    use crate::engine::PathQuery;
+    use crate::estimator::Estimator;
+    use crate::{
+        engine::RoutingEngine,
+        estimator::{DataPoint, LinearRegressionEstimator},
+    };
+    use account_aggregation::service::AccountAggregationService;
+    use config::BucketConfig;
+    use std::env;
     use std::sync::Arc;
+    use std::{
+        collections::HashMap,
+        hash::{DefaultHasher, Hash, Hasher},
+    };
+    use storage::mongodb_provider::MongoDBProvider;
 
     #[tokio::test]
     async fn test_get_cached_data() {
@@ -290,16 +278,14 @@ mod tests {
         .await
         .unwrap();
 
-        let routing_engine = RoutingEngine {
-            aas_client: AccountAggregationService::new(
-                user_db_provider.clone(),
-                user_db_provider.clone(),
-                "https://api.covalent.com".to_string(),
-                "my-api".to_string(),
-            ),
-            buckets,
-            cache: Arc::new(cache),
-        };
+        let aas_client = AccountAggregationService::new(
+            user_db_provider.clone(),
+            user_db_provider.clone(),
+            vec!["eth-mainnet".to_string()],
+            "https://api.covalent.com".to_string(),
+            "my-api".to_string(),
+        );
+        let routing_engine = RoutingEngine { aas_client, buckets, cache: Arc::new(cache) };
 
         // Define the target amount and path query
         let target_amount = 5.0;
@@ -309,5 +295,75 @@ mod tests {
         let result = routing_engine.get_cached_data(target_amount, path_query);
         assert!(result > 0.0);
         assert_eq!(result, dummy_estimator.estimate(target_amount));
+    }
+
+    #[tokio::test]
+    async fn test_get_best_cost_path() {
+        let api_key = env::var("COVALENT_API_KEY");
+        if api_key.is_err() {
+            panic!("COVALENT_API_KEY is not set");
+        }
+        let api_key = api_key.unwrap();
+
+        let user_db_provider = MongoDBProvider::new(
+            "mongodb://localhost:27017",
+            "test".to_string(),
+            "test".to_string(),
+            true,
+        )
+        .await
+        .unwrap();
+        let aas_client = AccountAggregationService::new(
+            user_db_provider.clone(),
+            user_db_provider.clone(),
+            vec!["bsc-mainnet".to_string()],
+            "https://api.covalenthq.com".to_string(),
+            api_key,
+        );
+
+        let buckets = vec![
+            BucketConfig {
+                from_chain_id: 56,
+                to_chain_id: 2,
+                from_token: "USDT".to_string(),
+                to_token: "USDT".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 0.0,
+                token_amount_to_usd: 5.0,
+            },
+            BucketConfig {
+                from_chain_id: 56,
+                to_chain_id: 2,
+                from_token: "USDT".to_string(),
+                to_token: "USDT".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 5.0,
+                token_amount_to_usd: 100.0,
+            },
+        ];
+        // Create a dummy estimator and serialize it
+        let dummy_estimator = LinearRegressionEstimator::build(vec![
+            DataPoint { x: 0.0, y: 0.0 },
+            DataPoint { x: 1.0, y: 1.0 },
+            DataPoint { x: 2.0, y: 2.0 },
+        ])
+        .unwrap();
+        let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
+        // Create a cache with a dummy bucket
+        let mut hasher = DefaultHasher::new();
+        buckets[0].hash(&mut hasher);
+        let key = hasher.finish().to_string();
+        let mut hasher = DefaultHasher::new();
+        buckets[1].hash(&mut hasher);
+        let key2 = hasher.finish().to_string();
+        let mut cache = HashMap::new();
+        cache.insert(key, serialized_estimator.clone());
+        cache.insert(key2, serialized_estimator);
+        let routing_engine = RoutingEngine { aas_client, buckets, cache: Arc::new(cache) };
+
+        // should have USDT in bsc-mainnet > $0.5
+        let dummy_user_address = "0x00000ebe3fa7cb71aE471547C836E0cE0AE758c2";
+        let result = routing_engine.get_best_cost_path(dummy_user_address, 2, "USDT", 0.5).await;
+        assert_eq!(result.len(), 1);
     }
 }

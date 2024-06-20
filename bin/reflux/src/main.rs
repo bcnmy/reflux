@@ -33,10 +33,14 @@ async fn main() {
 
     let (covalent_base_url, covalent_api_key) = (config.covalent.base_url, config.covalent.api_key);
 
+    let networks: Vec<String> =
+        config.chains.iter().map(|(_, chain)| chain.covalent_name.clone()).collect();
+
     // Initialize account aggregation service for api
     let account_service = AccountAggregationService::new(
         user_db_provider.clone(),
         account_mapping_db_provider.clone(),
+        networks,
         covalent_base_url,
         covalent_api_key,
     );
