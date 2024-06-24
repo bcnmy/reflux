@@ -14,6 +14,7 @@ reqwest = "0.12.4"
 ruint = "1.12.3"
 linreg = "0.2.0"
 thiserror = "1.0.61"
+log = "0.4.21"
 
 # workspace dependencies
 account-aggregation = { workspace = true }

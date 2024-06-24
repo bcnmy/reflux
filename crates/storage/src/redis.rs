@@ -1,13 +1,17 @@
+use std::time::Duration;
+
+use log::info;
 use redis;
-use redis::RedisError;
 use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
+use redis::RedisError;
 use thiserror::Error;
 
 use config;
 
-use crate::{MessageQueue, RoutingModelStore};
+use crate::{KeyValueStore, MessageQueue};
 
-struct RedisClient {
+#[derive(Debug)]
+pub struct RedisClient {
     client: redis::Client,
     connection: aio::MultiplexedConnection,
 }
@@ -20,38 +24,53 @@ impl RedisClient {
     }
 }
 
-impl RoutingModelStore for RedisClient {
+impl KeyValueStore for RedisClient {
     type Error = RedisClientError;
 
-    async fn get(&mut self, k: &String) -> Result<String, Self::Error> {
-        self.connection.get(k).await.map_err(RedisClientError::RedisLibraryError)
+    // Todo: This should return an option
+    async fn get(&self, k: &String) -> Result<String, Self::Error> {
+        info!("Getting key: {}", k);
+        self.connection.clone().get(k).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn get_multiple(&mut self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
-        self.connection.mget(k).await.map_err(RedisClientError::RedisLibraryError)
+    async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+        info!("Getting keys: {:?}", k);
+        self.connection.clone().mget(k).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn set(&mut self, k: &String, v: &String) -> Result<(), Self::Error> {
-        self.connection.set(k, v).await.map_err(RedisClientError::RedisLibraryError)
+    async fn set(&self, k: &String, v: &String, duration: Duration) -> Result<(), Self::Error> {
+        info!("Setting key: {} with value: {} and expiry: {}s", k, v, duration.as_secs());
+        self.connection
+            .clone()
+            .set_ex(k, v, duration.as_secs())
+            .await
+            .map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn set_multiple(&mut self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
-        self.connection.mset(kv).await.map_err(RedisClientError::RedisLibraryError)
+    async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        info!("Setting keys: {:?}", kv);
+        self.connection.clone().mset(kv).await.map_err(RedisClientError::RedisLibraryError)
     }
 }
 
 impl MessageQueue for RedisClient {
     type Error = RedisClientError;
 
-    async fn publish(&mut self, topic: &str, message: &str) -> Result<(), Self::Error> {
-        self.connection.publish(topic, message).await.map_err(RedisClientError::RedisLibraryError)
+    async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        info!("Publishing to topic: {} with message: {}", topic, message);
+        self.connection
+            .clone()
+            .publish(topic, message)
+            .await
+            .map_err(RedisClientError::RedisLibraryError)
     }
 
     fn subscribe<U>(
-        &mut self,
+        &self,
         topic: &str,
         callback: impl FnMut(Msg) -> ControlFlow<U>,
     ) -> Result<(), Self::Error> {
+        info!("Subscribing to topic: {}", topic);
         let mut connection = self.client.get_connection()?;
         connection.subscribe(topic, callback)?;
         Ok(())
@@ -62,6 +81,9 @@ impl MessageQueue for RedisClient {
 pub enum RedisClientError {
     #[error("Error thrown from Redis Library: {0}")]
     RedisLibraryError(#[from] RedisError),
+
+    #[error("Redis Mutex poisoned")]
+    MutexPoisonedError,
 }
 
 #[cfg(test)]
@@ -79,24 +101,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_store() {
-        let mut client = setup().await;
+        let client = setup().await;
 
         let keys = vec!["test_key1".to_string(), "test_key2".to_string()];
         let values = vec!["test_value1".to_string(), "test_value2".to_string()];
 
         // Clear
-        client.set(&keys[0], &String::from("")).await.unwrap();
+        client.set(&keys[0], &String::from(""), Duration::from_secs(10)).await.unwrap();
 
         // Test set
-        client.set(&keys[0], &values[0]).await.unwrap();
+        client.set(&keys[0], &values[0], Duration::from_secs(10)).await.unwrap();
 
         // Test get
         let value = client.get(&keys[0]).await.unwrap();
         assert_eq!(value, values[0]);
 
         // Clear
-        client.set(&keys[0], &String::from("")).await.unwrap();
-        client.set(&keys[1], &String::from("")).await.unwrap();
+        client.set(&keys[0], &String::from(""), Duration::from_secs(10)).await.unwrap();
+        client.set(&keys[1], &String::from(""), Duration::from_secs(10)).await.unwrap();
 
         // Multi Set
         client
@@ -114,7 +136,7 @@ mod tests {
     #[tokio::test]
     async fn test_pub_sub() {
         let (tx, mut rx) = channel::<String>();
-        let mut client = setup().await;
+        let client = setup().await;
 
         tokio::task::spawn_blocking(move || {
             client

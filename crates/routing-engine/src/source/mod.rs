@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Debug;
 
 use ruint::aliases::U256;
@@ -9,8 +10,8 @@ pub mod bungee;
 type Calldata = String;
 
 pub(crate) trait RouteSource: Debug {
-    type FetchRouteCostError: Debug;
-    type GenerateRouteCalldataError: Debug;
+    type FetchRouteCostError: Debug + Error;
+    type GenerateRouteCalldataError: Debug + Error;
 
     async fn fetch_least_route_cost_in_usd(
         &self,
