@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::num::ParseFloatError;
+use std::time::Duration;
 
 use derive_more::Display;
 use log::{error, info};
@@ -17,6 +18,7 @@ pub struct CoingeckoClient<'config, KVStore: KeyValueStore> {
     base_url: &'config String,
     client: reqwest::Client,
     cache: &'config KVStore,
+    key_expiry: Duration,
 }
 
 impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
@@ -24,6 +26,7 @@ impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
         base_url: &'config String,
         api_key: &'config String,
         cache: &'config KVStore,
+        key_expiry: Duration,
     ) -> CoingeckoClient<'config, KVStore> {
         let mut headers = header::HeaderMap::new();
         headers.insert(
@@ -37,7 +40,7 @@ impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
             .build()
             .expect("Failed to build reqwest client for Coingecko Client");
 
-        CoingeckoClient { base_url, client, cache }
+        CoingeckoClient { base_url, client, cache, key_expiry }
     }
 
     async fn get_fresh_token_price(
@@ -89,7 +92,7 @@ impl<'config, KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<'co
 
                 let price = self.get_fresh_token_price(token_symbol).await?;
                 self.cache
-                    .set(&key, &price.to_string())
+                    .set(&key, &price.to_string(), self.key_expiry)
                     .await
                     .map_err(CoingeckoClientError::UpdateTokenCacheError)?;
                 Ok(price)
@@ -135,11 +138,12 @@ mod tests {
     use std::collections::HashMap;
     use std::env;
     use std::fmt::Debug;
+    use std::time::Duration;
 
     use derive_more::Display;
     use thiserror::Error;
 
-    use config::Config;
+    use config::{Config, get_sample_config};
     use storage::KeyValueStore;
 
     use crate::CoingeckoClient;
@@ -167,7 +171,7 @@ mod tests {
             todo!()
         }
 
-        async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error> {
+        async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error> {
             self.map
                 .borrow_mut()
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
@@ -180,54 +184,7 @@ mod tests {
     }
 
     fn setup_config<'a>() -> Config {
-        // let config = config::Config::from_file("../../config.yaml").unwrap();
-        Config::from_yaml_str(
-            r#"
-chains:
-  - id: 1
-    name: Ethereum
-    is_enabled: true
-  - id: 42161
-    name: Arbitrum
-    is_enabled: true
-tokens:
-  - symbol: USDC
-    is_enabled: true
-    coingecko_symbol: usd-coin
-    by_chain:
-      1:
-        is_enabled: true
-        decimals: 6
-        address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-      42161:
-        is_enabled: true
-        decimals: 6
-        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
-buckets:
-bungee:
-  base_url: https://api.socket.tech/v2
-  api_key: <REDACTED>
-covalent:
-  base_url: 'https://api.bungee.exchange'
-  api_key: 'my-api'
-coingecko:
-  base_url: 'https://api.coingecko.com/api/v3'
-  api_key: 'my-api'
-infra:
-  redis_url: 'redis://localhost:6379'
-  rabbitmq_url: 'amqp://localhost:5672'
-  mongo_url: 'mongodb://localhost:27017'
-server:
-  port: 8080
-  host: 'localhost'
-indexer_config:
-    is_indexer: true
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-    schedule: "*"
-        "#,
-        )
-        .unwrap()
+        get_sample_config()
     }
 
     #[tokio::test]
@@ -238,7 +195,12 @@ indexer_config:
 
         let store = KVStore::default();
 
-        let client = CoingeckoClient::new(&config.coingecko.base_url, &api_key, &store);
+        let client = CoingeckoClient::new(
+            &config.coingecko.base_url,
+            &api_key,
+            &store,
+            Duration::from_secs(config.coingecko.expiry_sec),
+        );
         let price = client.get_fresh_token_price(&"usd-coin".to_string()).await.unwrap();
 
         assert!(price > 0.0);
@@ -252,7 +214,12 @@ indexer_config:
 
         let store = KVStore::default();
 
-        let client = CoingeckoClient::new(&config.coingecko.base_url, &api_key, &store);
+        let client = CoingeckoClient::new(
+            &config.coingecko.base_url,
+            &api_key,
+            &store,
+            Duration::from_secs(config.coingecko.expiry_sec),
+        );
         let price = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
 
         assert!(price > 0.0);
@@ -262,7 +229,7 @@ indexer_config:
         let price2 = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
         assert_eq!(price, price2);
 
-        store.set(&key, &"1.1".to_string()).await.unwrap();
+        store.set(&key, &"1.1".to_string(), Duration::from_secs(10)).await.unwrap();
 
         let price = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
         assert_eq!(price, 1.1);

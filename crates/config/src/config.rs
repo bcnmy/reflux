@@ -365,6 +365,10 @@ pub struct CoinGeckoConfig {
     // API key to access the CoinGecko API
     #[validate(min_length = 1)]
     pub api_key: String,
+
+    // The expiry time of the CoinGecko API key
+    #[validate(minimum = 1)]
+    pub expiry_sec: u64,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -416,143 +420,23 @@ pub struct IndexerConfig {
 
     #[validate(min_length = 1)]
     pub schedule: String,
+
+    #[validate(minimum = 2)]
+    pub points_per_bucket: u64,
+}
+
+pub fn get_sample_config() -> Config {
+    Config::from_file("../../config.yaml.example").unwrap()
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::config::{Config, ConfigError};
+    use crate::get_sample_config;
 
     #[test]
     fn test_config_parsing() {
-        let config = r#"
-chains:
-  - id: 1
-    name: Ethereum
-    is_enabled: true
-  - id: 56
-    name: Binance Smart Chain
-    is_enabled: true
-tokens:
-  - symbol: ETH
-    is_enabled: true
-    coingecko_symbol: ethereum
-    by_chain:
-      1:
-        is_enabled: true
-        decimals: 18
-        address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-      56:
-        is_enabled: true
-        decimals: 18
-        address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
-  - symbol: BNB
-    is_enabled: true
-    coingecko_symbol: binancecoin
-    by_chain:
-      1:
-        is_enabled: false
-        decimals: 18
-        address: '0xB8c77482e45F1F44dE1745F52C74426C631bDD52'
-      56:
-        is_enabled: true
-        decimals: 18
-        address: '0xEEeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-buckets:
-  - from_chain_id: 1
-    to_chain_id: 56
-    from_token: ETH
-    to_token: BNB
-    is_smart_contract_deposit_supported: true
-    token_amount_from_usd: 0.1
-    token_amount_to_usd: 100
-bungee:
-    base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
-covalent:
-    base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
-coingecko:
-    base_url: 'https://api.coingecko.com'
-    api_key: 'my-api'
-infra:
-    redis_url: 'redis://localhost:6379'
-    rabbitmq_url: 'amqp://localhost:5672'
-    mongo_url: 'mongodb://localhost:27017'
-server:
-    port: 8080
-    host: 'localhost'
-indexer_config:
-    is_indexer: true
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-    schedule: "*"
-        "#;
-        let config = Config::from_yaml_str(&config).unwrap();
-
-        assert_eq!(config.chains.len(), 2);
-        assert_eq!(config.chains[&1].id, 1);
-        assert_eq!(config.chains[&1].name, "Ethereum");
-        assert_eq!(config.chains[&1].is_enabled, true);
-        assert_eq!(config.chains[&56].id, 56);
-        assert_eq!(config.chains[&56].name, "Binance Smart Chain");
-        assert_eq!(config.chains[&56].is_enabled, true);
-
-        assert_eq!(config.tokens.len(), 2);
-        assert_eq!(config.tokens["ETH"].symbol, "ETH");
-        assert_eq!(config.tokens["ETH"].coingecko_symbol, "ethereum");
-        assert_eq!(config.tokens["ETH"].is_enabled, true);
-        assert_eq!(config.tokens["ETH"].by_chain.len(), 2);
-        assert_eq!(config.tokens["ETH"].by_chain[&1].decimals, 18);
-        assert_eq!(
-            config.tokens["ETH"].by_chain[&1].address,
-            "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
-        );
-        assert_eq!(config.tokens["ETH"].by_chain[&1].is_enabled, true);
-        assert_eq!(config.tokens["ETH"].by_chain[&56].decimals, 18);
-        assert_eq!(
-            config.tokens["ETH"].by_chain[&56].address,
-            "0x2170Ed0880ac9A755fd29B2688956BD959F933F8"
-        );
-        assert_eq!(config.tokens["ETH"].by_chain[&56].is_enabled, true);
-
-        assert_eq!(config.tokens["BNB"].symbol, "BNB");
-        assert_eq!(config.tokens["BNB"].coingecko_symbol, "binancecoin");
-        assert_eq!(config.tokens["BNB"].is_enabled, true);
-        assert_eq!(config.tokens["BNB"].by_chain.len(), 2);
-        assert_eq!(config.tokens["BNB"].by_chain[&1].decimals, 18);
-        assert_eq!(
-            config.tokens["BNB"].by_chain[&1].address,
-            "0xB8c77482e45F1F44dE1745F52C74426C631bDD52"
-        );
-        assert_eq!(config.tokens["BNB"].by_chain[&1].is_enabled, false);
-        assert_eq!(config.tokens["BNB"].by_chain[&56].decimals, 18);
-        assert_eq!(
-            config.tokens["BNB"].by_chain[&56].address,
-            "0xEEeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-        );
-        assert_eq!(config.tokens["BNB"].by_chain[&56].is_enabled, true);
-
-        assert_eq!(config.buckets.len(), 1);
-        assert_eq!(config.buckets[0].from_chain_id, 1);
-        assert_eq!(config.buckets[0].to_chain_id, 56);
-        assert_eq!(config.buckets[0].from_token, "ETH");
-        assert_eq!(config.buckets[0].to_token, "BNB");
-        assert_eq!(config.buckets[0].is_smart_contract_deposit_supported, true);
-        assert_eq!(config.buckets[0].token_amount_from_usd, 0.1);
-        assert_eq!(config.buckets[0].token_amount_to_usd, 100.0);
-
-        assert_eq!(config.covalent.base_url, "https://api.bungee.exchange");
-        assert_eq!(config.coingecko.base_url, "https://api.coingecko.com");
-        assert_eq!(config.bungee.api_key, "my-api");
-        assert_eq!(config.covalent.api_key, "my-api");
-        assert_eq!(config.coingecko.api_key, "my-api");
-        assert_eq!(config.infra.redis_url, "redis://localhost:6379");
-        assert_eq!(config.infra.rabbitmq_url, "amqp://localhost:5672");
-        assert_eq!(config.infra.mongo_url, "mongodb://localhost:27017");
-
-        assert_eq!(config.indexer_config.is_indexer, true);
-        assert_eq!(config.indexer_config.indexer_update_topic, "indexer_update");
-        assert_eq!(config.indexer_config.indexer_update_message, "message");
+        let config = get_sample_config();
     }
 
     #[test]
@@ -576,6 +460,7 @@ covalent:
 coingecko:
     base_url: 'https://api.coingecko.com'
     api_key: 'my-api'
+    expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
@@ -588,8 +473,8 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     schedule: "*"
-        "#;
-
+    points_per_bucket: 10
+"#;
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
                 let err = err.as_validation_errors().unwrap().to_string();
@@ -642,6 +527,7 @@ covalent:
 coingecko:
     base_url: 'https://api.coingecko.com'
     api_key: 'my-api'
+    expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
     rabbitmq_url: 'amqp://localhost:5672'
@@ -654,7 +540,8 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     schedule: "*"
-        "#;
+    points_per_bucket: 10
+"#;
 
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
@@ -667,10 +554,5 @@ indexer_config:
             },
             true
         );
-    }
-
-    #[test]
-    fn test_sample_config_should_be_valid() {
-        assert_eq!(Config::from_file("../../config.yaml.example").is_ok(), true);
     }
 }

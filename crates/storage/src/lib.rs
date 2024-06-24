@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt::Debug;
+use std::time::Duration;
 
 pub use ::redis::{ControlFlow, Msg};
 
@@ -18,12 +19,12 @@ pub trait KeyValueStore: Debug {
 
     async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error>;
 
-    async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error>;
+    async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error>;
 
     async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error>;
 }
 
-pub trait MessageQueue {
+pub trait MessageQueue: Debug {
     type Error: Error + Debug;
 
     async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error>;

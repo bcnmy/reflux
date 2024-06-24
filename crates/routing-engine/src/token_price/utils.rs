@@ -56,51 +56,12 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::Config;
+    use config::{Config, get_sample_config};
 
     use crate::token_price::TokenPriceProvider;
 
     fn setup() -> Config {
-        config::Config::from_yaml_str(
-            r#"
-chains:
-  - id: 1
-    name: Ethereum
-    is_enabled: true
-tokens:
-  - symbol: USDC
-    coingecko_symbol: usd-coin
-    is_enabled: true
-    by_chain:
-      1:
-        is_enabled: true
-        decimals: 6
-        address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-buckets:
-bungee:
-  base_url: https://api.socket.tech/v2
-  api_key: 72a5b4b0-e727-48be-8aa1-5da9d62fe635
-covalent:
-  base_url: 'https://api.bungee.exchange'
-  api_key: 'my-api'
-coingecko:
-  base_url: 'https://api.coingecko.com/api/v3'
-  api_key: 'my-api'
-infra:
-  redis_url: 'redis://localhost:6379'
-  rabbitmq_url: 'amqp://localhost:5672'
-  mongo_url: 'mongodb://localhost:27017'
-server:
-  port: 8080
-  host: 'localhost'
-indexer_config:
-    is_indexer: true
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-    schedule: "*"
-        "#,
-        )
-        .unwrap()
+        get_sample_config()
     }
 
     #[derive(Debug)]

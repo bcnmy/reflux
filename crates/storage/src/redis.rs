@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::sync::Mutex;
+use std::time::Duration;
 
 use log::info;
 use redis;
@@ -39,9 +38,13 @@ impl KeyValueStore for RedisClient {
         self.connection.clone().mget(k).await.map_err(RedisClientError::RedisLibraryError)
     }
 
-    async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error> {
-        info!("Setting key: {} with value: {}", k, v);
-        self.connection.clone().set(k, v).await.map_err(RedisClientError::RedisLibraryError)
+    async fn set(&self, k: &String, v: &String, duration: Duration) -> Result<(), Self::Error> {
+        info!("Setting key: {} with value: {} and expiry: {}s", k, v, duration.as_secs());
+        self.connection
+            .clone()
+            .set_ex(k, v, duration.as_secs())
+            .await
+            .map_err(RedisClientError::RedisLibraryError)
     }
 
     async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
@@ -104,18 +107,18 @@ mod tests {
         let values = vec!["test_value1".to_string(), "test_value2".to_string()];
 
         // Clear
-        client.set(&keys[0], &String::from("")).await.unwrap();
+        client.set(&keys[0], &String::from(""), Duration::from_secs(10)).await.unwrap();
 
         // Test set
-        client.set(&keys[0], &values[0]).await.unwrap();
+        client.set(&keys[0], &values[0], Duration::from_secs(10)).await.unwrap();
 
         // Test get
         let value = client.get(&keys[0]).await.unwrap();
         assert_eq!(value, values[0]);
 
         // Clear
-        client.set(&keys[0], &String::from("")).await.unwrap();
-        client.set(&keys[1], &String::from("")).await.unwrap();
+        client.set(&keys[0], &String::from(""), Duration::from_secs(10)).await.unwrap();
+        client.set(&keys[1], &String::from(""), Duration::from_secs(10)).await.unwrap();
 
         // Multi Set
         client

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::http::Method;
 use log::{error, info};
 use tokio;
@@ -84,13 +86,14 @@ async fn main() {
     if config.indexer_config.is_indexer {
         info!("Configuring Indexer");
 
-        let bungee_client =
-            BungeeClient::new(&config.bungee).expect("Failed to Instantiate Bungee Client");
+        let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
+            .expect("Failed to Instantiate Bungee Client");
 
         let token_price_provider = CoingeckoClient::new(
             &config.coingecko.base_url,
             &config.coingecko.api_key,
             &redis_provider,
+            Duration::from_secs(config.coingecko.expiry_sec),
         );
 
         let indexer = Indexer::new(

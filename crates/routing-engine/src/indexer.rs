@@ -13,7 +13,6 @@ use crate::engine::Estimator;
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
-const POINTS_COUNT_PER_BUCKET: u8 = 2;
 
 pub struct Indexer<
     'config,
@@ -47,13 +46,14 @@ impl<
         Indexer { config, source, model_store, message_producer, token_price_provider }
     }
 
-    fn generate_bucket_observation_points(bucket: &BucketConfig) -> Vec<f64> {
-        (0..POINTS_COUNT_PER_BUCKET)
+    fn generate_bucket_observation_points(&self, bucket: &BucketConfig) -> Vec<f64> {
+        let points_per_bucket = self.config.indexer_config.points_per_bucket;
+        (0..points_per_bucket)
             .into_iter()
             .map(|i| {
                 bucket.token_amount_from_usd
                     + (i as f64) * (bucket.token_amount_to_usd - bucket.token_amount_from_usd)
-                        / (POINTS_COUNT_PER_BUCKET as f64)
+                        / (points_per_bucket as f64)
             })
             .collect()
     }
@@ -66,7 +66,7 @@ impl<
         info!("Building estimator for bucket: {:?}", bucket);
 
         // Generate Data to "Train" Estimator
-        let observation_points = Indexer::<RouteSource,ModelStore,Producer,TokenPriceProvider>::generate_bucket_observation_points(bucket);
+        let observation_points = self.generate_bucket_observation_points(bucket);
         info!("{} Observation points generated", observation_points.len());
 
         let data_points = futures::stream::iter(observation_points)
@@ -117,13 +117,19 @@ impl<
             >>()
             .await;
 
-        let data_points: Vec<estimator::DataPoint<_, _>> = data_points
-            .into_iter()
-            .filter_map(|r| match r {
-                Ok(data_point) => Some(data_point),
-                _ => None,
-            })
-            .collect();
+        let (data_points, failed): (Vec<Result<_, _>>, Vec<Result<_, _>>) =
+            data_points.into_iter().partition(|r| r.is_ok());
+
+        let data_points: Vec<estimator::DataPoint<f64, f64>> =
+            data_points.into_iter().map(|r| r.unwrap()).collect();
+        let failed: Vec<
+            IndexerErrors<TokenPriceProvider, RouteSource, ModelStore, Producer, Estimator>,
+        > = failed.into_iter().map(|r| r.unwrap_err()).collect();
+
+        if failed.len() > 0 {
+            let err = format!("Failed to fetch some data points: {:?}", failed);
+            error!("Failed to fetch some data points: {:?}", failed);
+        }
 
         if data_points.is_empty() {
             error!("No data points remain for bucket: {:?}", bucket);
@@ -271,11 +277,12 @@ pub enum BuildEstimatorError<'config, 'est_de, Estimator: estimator::Estimator<'
 mod tests {
     use std::env;
     use std::fmt::Error;
+    use std::time::Duration;
 
     use derive_more::Display;
     use thiserror::Error;
 
-    use config::Config;
+    use config::{Config, get_sample_config};
     use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
 
     use crate::CostType;
@@ -300,7 +307,7 @@ mod tests {
             Ok(vec!["Get".to_string(); k.len()])
         }
 
-        async fn set(&self, k: &String, v: &String) -> Result<(), Self::Error> {
+        async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error> {
             Ok(())
         }
 
@@ -309,6 +316,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     struct ProducerStub;
     impl MessageQueue for ProducerStub {
         type Error = Err;
@@ -337,79 +345,32 @@ mod tests {
     }
 
     fn setup<'a>() -> (Config, BungeeClient, ModelStoreStub, ProducerStub, TokenPriceProviderStub) {
-        // let config = config::Config::from_file("../../config.yaml").unwrap();
-        let mut config = config::Config::from_yaml_str(
-            r#"
-chains:
-  - id: 1
-    name: Ethereum
-    is_enabled: true
-  - id: 42161
-    name: Arbitrum
-    is_enabled: true
-tokens:
-  - symbol: USDC
-    is_enabled: true
-    coingecko_symbol: usd-coin
-    by_chain:
-      1:
-        is_enabled: true
-        decimals: 6
-        address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-      42161:
-        is_enabled: true
-        decimals: 6
-        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
-buckets:
-  - from_chain_id: 1
-    to_chain_id: 42161
-    from_token: USDC
-    to_token: USDC
-    is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
-    token_amount_to_usd: 10
-  - from_chain_id: 1
-    to_chain_id: 42161
-    from_token: USDC
-    to_token: USDC
-    is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 10
-    token_amount_to_usd: 100
-  - from_chain_id: 1
-    to_chain_id: 42161
-    from_token: USDC
-    to_token: USDC
-    is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 100
-    token_amount_to_usd: 1000
-bungee:
-  base_url: https://api.socket.tech/v2
-  api_key: <REDACTED>
-covalent:
-  base_url: 'https://api.bungee.exchange'
-  api_key: 'my-api'
-coingecko:
-  base_url: 'https://api.coingecko.com/api/v3'
-  api_key: 'my-api'
-infra:
-  redis_url: 'redis://localhost:6379'
-  rabbitmq_url: 'amqp://localhost:5672'
-  mongo_url: 'mongodb://localhost:27017'
-server:
-  port: 8080
-  host: 'localhost'
-indexer_config:
-    is_indexer: true
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-    schedule: "*"
-        "#,
-        )
-        .unwrap();
+        let mut config = get_sample_config();
+        config.buckets = vec![
+            config::BucketConfig {
+                from_chain_id: 1,
+                to_chain_id: 42161,
+                from_token: "USDC".to_string(),
+                to_token: "USDC".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 10.0,
+                token_amount_to_usd: 100.0,
+            },
+            config::BucketConfig {
+                from_chain_id: 1,
+                to_chain_id: 42161,
+                from_token: "USDC".to_string(),
+                to_token: "USDC".to_string(),
+                is_smart_contract_deposit_supported: false,
+                token_amount_from_usd: 100.0,
+                token_amount_to_usd: 1000.0,
+            },
+        ];
 
         config.bungee.api_key = env::var("BUNGEE_API_KEY").unwrap();
 
-        let bungee_client = BungeeClient::new(&config.bungee).unwrap();
+        let bungee_client =
+            BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key).unwrap();
         let model_store = ModelStoreStub;
         let message_producer = ProducerStub;
         let token_price_provider = TokenPriceProviderStub;
