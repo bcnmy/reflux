@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::Method;
@@ -20,10 +21,19 @@ use storage::RedisClient;
 async fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
-    info!("Starting Reflux Server");
-
     // Load configuration from yaml
     let config = Config::from_file("config.yaml").expect("Failed to load config file");
+
+    if config.indexer_config.is_indexer {
+        run_indexer(config).await;
+    } else {
+        run_server(config).await;
+    }
+}
+
+async fn run_server(config: Config) {
+    info!("Starting Reflux Server");
+
     let (app_host, app_port) = (config.server.host.clone(), config.server.port.clone());
 
     // Instance of MongoDBProvider for users and account mappings
@@ -43,11 +53,6 @@ async fn main() {
     )
     .await
     .expect("Failed to create MongoDB provider for account mappings");
-
-    // Redis Instance
-    let redis_provider = RedisClient::build(&config.infra.redis_url)
-        .await
-        .expect("Failed to instantiate redis client");
 
     let (covalent_base_url, covalent_api_key) =
         (config.covalent.base_url.clone(), config.covalent.api_key.clone());
@@ -77,64 +82,77 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", app_host, app_port))
         .await
         .expect("Failed to bind port");
-    // axum::serve(listener, app.into_make_service())
-    //     .with_graceful_shutdown(shutdown_signal())
-    //     .await
-    //     .unwrap();
-
-    // Indexer And Dependencies
-    if config.indexer_config.is_indexer {
-        info!("Configuring Indexer");
-
-        let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
-            .expect("Failed to Instantiate Bungee Client");
-
-        let token_price_provider = CoingeckoClient::new(
-            &config.coingecko.base_url,
-            &config.coingecko.api_key,
-            &redis_provider,
-            Duration::from_secs(config.coingecko.expiry_sec),
-        );
-
-        let indexer = Indexer::new(
-            &config,
-            &bungee_client,
-            &redis_provider,
-            &redis_provider,
-            &token_price_provider,
-        );
-
-        match indexer.run::<'_, LinearRegressionEstimator>().await {
-            Ok(_) => info!("Indexer Job Completed"),
-            Err(e) => error!("Indexer Job Failed: {}", e),
-        }
-        //
-        // let mut scheduler = JobScheduler::new().await.expect("Failed to create scheduler");
-        // scheduler
-        //     .add(
-        //         Job::new_async(config.indexer_config.schedule.as_str(), |uuid, mut l| {
-        //             Box::pin(async move {
-        //                 match indexer.run::<'_, LinearRegressionEstimator>().await {
-        //                     Ok(_) => info!("Indexer Job Completed"),
-        //                     Err(e) => error!("Indexer Job Failed: {}", e),
-        //                 }
-        //
-        //                 let next_tick = l.next_tick_for_job(uuid).await;
-        //                 match next_tick {
-        //                     Ok(Some(ts)) => println!("Next time for 7s job is {:?}", ts),
-        //                     _ => println!("Could not get next tick for 7s job"),
-        //                 }
-        //             })
-        //         })
-        //         .expect("Failed to create job"),
-        //     )
-        //     .await
-        //     .expect("Failed to add job");
-    } else {
-        info!("Indexer is disabled");
-    }
+    axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
 
     info!("Server stopped.");
+}
+
+async fn run_indexer(config: Config) {
+    info!("Configuring Indexer");
+
+    let schedule = config.indexer_config.schedule.clone();
+    let scheduler = JobScheduler::new().await.expect("Failed to create scheduler");
+
+    let config = Arc::new(config);
+
+    let job = Job::new_async(schedule.as_str(), move |uuid, mut l: JobScheduler| {
+        /*
+           TODO: I"m not sure why this works tbh
+           Observations:
+           1. If I don't use Arc, I get an error stating that the value is moved
+           2. If this closure (not the async block) is not move, I get an error stating that the value is moved
+           3. If I borrow config in this closure, I get a dangling reference error
+           A combination of using Arc and move in the closure seems to work, but I'm not sure why
+        */
+
+        let config = Arc::clone(&config);
+
+        Box::pin(async move {
+            let redis_provider = RedisClient::build(&config.infra.redis_url)
+                .await
+                .expect("Failed to instantiate redis client");
+
+            let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
+                .expect("Failed to Instantiate Bungee Client");
+
+            let token_price_provider = CoingeckoClient::new(
+                &config.coingecko.base_url,
+                &config.coingecko.api_key,
+                &redis_provider,
+                Duration::from_secs(config.coingecko.expiry_sec),
+            );
+
+            let indexer: Indexer<
+                BungeeClient,
+                RedisClient,
+                RedisClient,
+                CoingeckoClient<RedisClient>,
+            > = Indexer::new(
+                &config,
+                &bungee_client,
+                &redis_provider,
+                &redis_provider,
+                &token_price_provider,
+            );
+
+            match indexer.run::<LinearRegressionEstimator>().await {
+                Ok(_) => info!("Indexer Job Completed"),
+                Err(e) => error!("Indexer Job Failed: {}", e),
+            };
+
+            let next_tick = l.next_tick_for_job(uuid).await;
+            match next_tick {
+                Ok(Some(ts)) => println!("Next time for the job is {:?}", ts),
+                _ => println!("Could not get next tick for the job"),
+            };
+        })
+    })
+    .expect("Failed to create job");
+
+    scheduler.add(job).await.expect("Failed to add job");
 }
 
 async fn shutdown_signal() {

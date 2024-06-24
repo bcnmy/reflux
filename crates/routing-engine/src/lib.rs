@@ -20,7 +20,7 @@ mod source;
 #[derive(Debug, Error, Display)]
 enum CostType {
     Fee,
-    BridgingTime,
+    // BridgingTime,
 }
 
 #[derive(Debug)]
