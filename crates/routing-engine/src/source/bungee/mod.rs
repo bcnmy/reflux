@@ -1,3 +1,5 @@
+use derive_more::Display;
+use log::{error, info};
 use reqwest;
 use reqwest::header;
 use ruint::aliases::U256;
@@ -34,6 +36,8 @@ impl BungeeClient {
         &self,
         params: GetQuoteRequest,
     ) -> Result<BungeeResponse<GetQuoteResponse>, BungeeClientError> {
+        info!("Fetching quote from bungee for {:?}", params);
+
         let response =
             self.client.get(self.base_url.to_owned() + "/quote").query(&params).send().await?;
         let raw_text = response.text().await?;
@@ -63,9 +67,14 @@ pub enum BungeeFetchRouteCostError {
     EstimationTypeNotImplementedError(#[from] CostType),
 }
 
+#[derive(Error, Debug, Display)]
+pub struct GenerateRouteCalldataError;
+
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
-    type GenerateRouteCalldataError = ();
+
+    // todo
+    type GenerateRouteCalldataError = GenerateRouteCalldataError;
 
     async fn fetch_least_route_cost_in_usd(
         &self,
@@ -73,9 +82,12 @@ impl RouteSource for BungeeClient {
         from_token_amount: U256,
         estimation_type: &CostType,
     ) -> Result<f64, Self::FetchRouteCostError> {
+        info!("Fetching least route cost in USD for route {:?} with token amount {} and estimation type {}", route, from_token_amount, estimation_type);
+
         // Build GetQuoteRequest
         let from_token = route.from_token.by_chain.get(&route.from_chain.id);
         if from_token.is_none() {
+            error!("Missing chain for token {} in config", route.from_token.symbol);
             return Err(BungeeFetchRouteCostError::MissingChainForTokenInConfigError(
                 route.from_chain.id,
                 route.from_token.symbol.clone(),
@@ -86,6 +98,7 @@ impl RouteSource for BungeeClient {
 
         let to_token = route.to_token.by_chain.get(&route.to_chain.id);
         if let None = to_token {
+            error!("Missing chain for token {} in config", route.to_token.symbol);
             return Err(BungeeFetchRouteCostError::MissingChainForTokenInConfigError(
                 route.to_chain.id,
                 route.to_token.symbol.clone(),
@@ -128,8 +141,11 @@ impl RouteSource for BungeeClient {
             .collect();
 
         if route_costs_in_usd.len() == 0 {
+            error!("No valid routes returned by Bungee API for route {:?}", route);
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
+
+        info!("Route costs in USD: {:?}", route_costs_in_usd);
 
         Ok(route_costs_in_usd.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap())
     }
@@ -206,6 +222,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#,
         )
         .unwrap();

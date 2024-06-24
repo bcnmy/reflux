@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::num::ParseFloatError;
 
 use derive_more::Display;
+use log::{error, info};
 use reqwest::{header, StatusCode};
 use serde::Deserialize;
 use thiserror::Error;
@@ -43,10 +44,13 @@ impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
         &self,
         token_symbol: &String,
     ) -> Result<f64, CoingeckoClientError<KVStore>> {
+        info!("Fetching fresh token price for {}", token_symbol);
+
         let response =
             self.client.get(format!("{}/coins/{}", self.base_url, token_symbol)).send().await?;
 
         if response.status() != StatusCode::OK {
+            error!("CoinGecko /coins/ Request failed with status: {}", response.status());
             return Err(RequestFailed(response.status()));
         }
 
@@ -55,7 +59,11 @@ impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
         let response: CoinsIdResponse = serde_json::from_str(&raw_text)
             .map_err(|err| CoingeckoClientError::DeserialisationError(raw_text, err))?;
 
-        Ok(response.market_data.current_price.usd)
+        let result = response.market_data.current_price.usd;
+
+        info!("Token price fetched from API for token {}: {}", token_symbol, result);
+
+        Ok(result)
     }
 }
 
@@ -63,9 +71,13 @@ impl<'config, KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<'co
     type Error = CoingeckoClientError<KVStore>;
 
     async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error> {
+        info!("Fetching token price for {}", token_symbol);
+
         let key = format!("{}_price", token_symbol);
         match self.cache.get(&key).await {
             Ok(result) => {
+                info!("Token price fetched from cache");
+
                 let price: f64 = result.parse()?;
                 if price.is_nan() {
                     Err(Self::Error::InvalidPriceReturnedFromCacheResult(result.clone()))?;
@@ -73,6 +85,8 @@ impl<'config, KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<'co
                 Ok(price)
             }
             Err(_) => {
+                info!("Token price not found in cache");
+
                 let price = self.get_fresh_token_price(token_symbol).await?;
                 self.cache
                     .set(&key, &price.to_string())
@@ -210,6 +224,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#,
         )
         .unwrap()

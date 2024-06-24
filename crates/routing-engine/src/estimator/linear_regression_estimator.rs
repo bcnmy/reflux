@@ -1,4 +1,7 @@
+use derive_more::derive;
+use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::estimator::{DataPoint, Estimator};
 
@@ -9,18 +12,39 @@ pub struct LinearRegressionEstimator {
 }
 
 impl<'de> Estimator<'de, f64, f64> for LinearRegressionEstimator {
-    type Error = linreg::Error;
+    type Error = LinearRegressionEstimationError;
 
-    fn build(data: Vec<DataPoint<f64, f64>>) -> Result<Self, linreg::Error> {
+    fn build(data: Vec<DataPoint<f64, f64>>) -> Result<Self, LinearRegressionEstimationError> {
+        if data.len() == 0 {
+            return Err(LinearRegressionEstimationError::EmptyDataError);
+        }
+
+        if data.len() == 1 {
+            return Err(LinearRegressionEstimationError::NotEnoughDataError);
+        }
+
         let (x, y): (Vec<f64>, Vec<f64>) =
             data.into_iter().map(|DataPoint { x, y }| (x, y)).unzip();
-        let (slope, intercept) = linreg::linear_regression(&x, &y)?;
+        let (slope, intercept) = linreg::linear_regression(&x, &y)
+            .map_err(|err| LinearRegressionEstimationError::LinregError(err))?;
         Ok(Self { slope, intercept })
     }
 
     fn estimate(&self, x: f64) -> f64 {
         self.slope * x + self.intercept
     }
+}
+
+#[derive(Debug, Error)]
+pub enum LinearRegressionEstimationError {
+    #[error("Linear regression error: {0}")]
+    LinregError(linreg::Error),
+
+    #[error("Data provided is empty")]
+    EmptyDataError,
+
+    #[error("Data provided is not enough")]
+    NotEnoughDataError,
 }
 
 #[cfg(test)]

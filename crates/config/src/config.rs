@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -413,6 +413,9 @@ pub struct IndexerConfig {
 
     #[validate(min_length = 1)]
     pub indexer_update_message: String,
+
+    #[validate(min_length = 1)]
+    pub schedule: String,
 }
 
 #[cfg(test)]
@@ -482,6 +485,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#;
         let config = Config::from_yaml_str(&config).unwrap();
 
@@ -583,6 +587,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#;
 
         assert_eq!(
@@ -648,6 +653,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#;
 
         assert_eq!(

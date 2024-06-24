@@ -97,6 +97,7 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
+    schedule: "*"
         "#,
         )
         .unwrap()

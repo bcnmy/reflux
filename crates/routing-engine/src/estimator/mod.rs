@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -12,8 +13,8 @@ pub struct DataPoint<Input, Output> {
     pub(crate) y: Output,
 }
 
-pub trait Estimator<'de, Input, Output>: Serialize + Deserialize<'de> {
-    type Error: Debug;
+pub trait Estimator<'de, Input, Output>: Serialize + Deserialize<'de> + Debug {
+    type Error: Error + Debug;
 
     fn build(data: Vec<DataPoint<Input, Output>>) -> Result<Self, Self::Error>;
 

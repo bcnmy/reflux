@@ -23,6 +23,7 @@ enum CostType {
     BridgingTime,
 }
 
+#[derive(Debug)]
 pub struct Route<'a> {
     from_chain: &'a ChainConfig,
     to_chain: &'a ChainConfig,
@@ -63,11 +64,11 @@ impl<'a> Route<'a> {
     }
 }
 
-#[derive(Debug, Display, From)]
+#[derive(Debug, Error)]
 enum RouteError {
-    #[display("Chain not found while building route: {}", _0)]
+    #[error("Chain not found while building route: {}", _0)]
     ChainNotFoundError(u32),
 
-    #[display("Token not found while building route: {}", _0)]
+    #[error("Token not found while building route: {}", _0)]
     TokenNotFoundError(String),
 }
