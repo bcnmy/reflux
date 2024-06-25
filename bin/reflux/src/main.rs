@@ -25,6 +25,10 @@ struct Args {
     /// Run the Indexer
     #[arg(short, long)]
     indexer: bool,
+
+    /// Config file path
+    #[arg(short, long, default_value = "config.yaml")]
+    config: String,
 }
 
 #[tokio::main]
@@ -44,7 +48,7 @@ async fn main() {
     }
 
     // Load configuration from yaml
-    let config = Config::from_file("config.yaml").expect("Failed to load config file");
+    let config = Config::from_file(&args.config).expect("Failed to load config file");
 
     if args.indexer {
         run_indexer(config).await;

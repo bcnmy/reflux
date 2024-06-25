@@ -1,0 +1,49 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  reflux-solver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reflux-solver
+    entrypoint: [ "/app/reflux", "--solver", "--config", "/app/ctx/config.docker.yaml" ]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - mongodb
+    volumes:
+      - .:/app/ctx
+
+  reflux-indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reflux-indexer
+    entrypoint: [ "/app/reflux", "--indexer", "--config", "/app/ctx/config.docker.yaml" ]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+      - mongodb
+    volumes:
+      - .:/app/ctx
+
+volumes:
+  redis_data:
+  mongo_data:
+
