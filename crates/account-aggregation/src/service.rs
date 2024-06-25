@@ -1,15 +1,18 @@
+use std::error::Error;
+use std::sync::Arc;
+
+use derive_more::Display;
+use mongodb::bson;
+use reqwest::Client as ReqwestClient;
+use uuid::Uuid;
+
+use storage::DBProvider;
+use storage::mongodb_client::MongoDBClient;
+
 use crate::types::{
     Account, AddAccountPayload, ApiResponse, Balance, RegisterAccountPayload, User,
     UserAccountMapping, UserAccountMappingQuery, UserQuery,
 };
-use derive_more::Display;
-use mongodb::bson;
-use reqwest::Client as ReqwestClient;
-use std::error::Error;
-use std::sync::Arc;
-use storage::db_provider::DBProvider;
-use storage::mongodb_provider::MongoDBProvider;
-use uuid::Uuid;
 
 /// Account Aggregation Service
 ///
@@ -23,8 +26,8 @@ use uuid::Uuid;
     account_mapping_db_provider
 )]
 pub struct AccountAggregationService {
-    pub user_db_provider: Arc<MongoDBProvider>,
-    pub account_mapping_db_provider: Arc<MongoDBProvider>,
+    pub user_db_provider: Arc<MongoDBClient>,
+    pub account_mapping_db_provider: Arc<MongoDBClient>,
     covalent_base_url: String,
     covalent_api_key: String,
     client: ReqwestClient,
@@ -34,8 +37,8 @@ pub struct AccountAggregationService {
 impl AccountAggregationService {
     /// Create a new AccountAggregationService
     pub fn new(
-        user_db_provider: MongoDBProvider,
-        account_mapping_db_provider: MongoDBProvider,
+        user_db_provider: MongoDBClient,
+        account_mapping_db_provider: MongoDBClient,
         networks: Vec<String>,
         base_url: String,
         api_key: String,

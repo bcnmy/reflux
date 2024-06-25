@@ -11,11 +11,11 @@ use tower_http::cors::{Any, CorsLayer};
 use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
+use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use routing_engine::engine::RoutingEngine;
 use routing_engine::estimator::LinearRegressionEstimator;
-use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
-use storage::mongodb_provider::MongoDBProvider;
 use storage::{ControlFlow, MessageQueue, RedisClient};
+use storage::mongodb_client::MongoDBClient;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -64,7 +64,7 @@ async fn run_solver(config: Config) {
     let (app_host, app_port) = (config.server.host.clone(), config.server.port.clone());
 
     // Instance of MongoDBProvider for users and account mappings
-    let user_db_provider = MongoDBProvider::new(
+    let user_db_provider = MongoDBClient::new(
         &config.infra.mongo_url,
         "reflux".to_string(),
         "users".to_string(),
@@ -72,7 +72,7 @@ async fn run_solver(config: Config) {
     )
     .await
     .expect("Failed to create MongoDB provider for users");
-    let account_mapping_db_provider = MongoDBProvider::new(
+    let account_mapping_db_provider = MongoDBClient::new(
         &config.infra.mongo_url,
         "reflux".to_string(),
         "account_mappings".to_string(),

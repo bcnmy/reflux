@@ -1,16 +1,17 @@
-use account_aggregation::service::AccountAggregationService;
-use account_aggregation::types::Balance;
-use config::config::BucketConfig;
+use std::borrow::Borrow;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use derive_more::Display;
 use futures::stream::{self, StreamExt};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
-
-use std::collections::HashMap;
-use std::sync::Arc;
-use storage::RedisClient;
 use tokio::sync::RwLock;
+
+use account_aggregation::service::AccountAggregationService;
+use account_aggregation::types::Balance;
+use config::config::BucketConfig;
+use storage::RedisClient;
 
 use crate::estimator::{Estimator, LinearRegressionEstimator};
 
@@ -246,19 +247,22 @@ impl RoutingEngine {
 
 #[cfg(test)]
 mod tests {
-    use crate::engine::PathQuery;
-    use crate::estimator::Estimator;
+    use std::collections::HashMap;
+    use std::env;
+    use std::sync::Arc;
+
+    use tokio::sync::RwLock;
+
+    use account_aggregation::service::AccountAggregationService;
+    use config::BucketConfig;
+    use storage::mongodb_client::MongoDBClient;
+
     use crate::{
         engine::RoutingEngine,
         estimator::{DataPoint, LinearRegressionEstimator},
     };
-    use account_aggregation::service::AccountAggregationService;
-    use config::BucketConfig;
-    use std::collections::HashMap;
-    use std::env;
-    use std::sync::Arc;
-    use storage::mongodb_provider::MongoDBProvider;
-    use tokio::sync::RwLock;
+    use crate::engine::PathQuery;
+    use crate::estimator::Estimator;
 
     #[tokio::test]
     async fn test_get_cached_data() {
@@ -299,7 +303,7 @@ mod tests {
         cache.insert(key, serialized_estimator);
 
         // Create RoutingEngine instance with dummy data
-        let user_db_provider = MongoDBProvider::new(
+        let user_db_provider = MongoDBClient::new(
             "mongodb://localhost:27017",
             "test".to_string(),
             "test".to_string(),
@@ -342,7 +346,7 @@ mod tests {
         }
         let api_key = api_key.unwrap();
 
-        let user_db_provider = MongoDBProvider::new(
+        let user_db_provider = MongoDBClient::new(
             "mongodb://localhost:27017",
             "test".to_string(),
             "test".to_string(),
