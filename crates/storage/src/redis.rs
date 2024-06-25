@@ -37,6 +37,7 @@ impl RedisClient {
 impl KeyValueStore for RedisClient {
     type Error = RedisClientError;
 
+    // Todo: This should return an option
     async fn get(&self, k: &String) -> Result<String, Self::Error> {
         info!("Getting key: {}", k);
         self.connection.clone().get(k).await.map_err(RedisClientError::RedisLibraryError)
@@ -183,6 +184,8 @@ mod tests {
                 })
                 .unwrap();
         });
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
 
         let client = setup().await;
         client.publish("TOPIC", "HELLO").await.unwrap();

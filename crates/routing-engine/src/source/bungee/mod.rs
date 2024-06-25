@@ -5,11 +5,10 @@ use reqwest::header;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-use config::config::BungeeConfig;
 use types::*;
 
-use crate::{CostType, Route};
 use crate::source::{Calldata, RouteSource};
+use crate::{CostType, Route};
 
 mod types;
 
@@ -74,7 +73,6 @@ pub struct GenerateRouteCalldataError;
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
 
-    // todo
     type GenerateRouteCalldataError = GenerateRouteCalldataError;
 
     async fn fetch_least_route_cost_in_usd(
@@ -135,7 +133,6 @@ impl RouteSource for BungeeClient {
                     route.total_gas_fees_in_usd + route.input_value_in_usd?
                         - route.output_value_in_usd?,
                 ),
-                _ => None,
             })
             .filter(|cost| cost.is_some())
             .map(|cost| cost.unwrap())
@@ -146,14 +143,14 @@ impl RouteSource for BungeeClient {
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
 
-        info!("Route costs in USD: {:?}", route_costs_in_usd);
+        info!("Route costs in USD: {:?} for route {:?}", route_costs_in_usd, route);
 
         Ok(route_costs_in_usd.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap())
     }
 
     async fn generate_route_calldata(
         &self,
-        _route: &Route<'_>,
+        _: &Route<'_>,
     ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
         todo!()
     }
@@ -165,13 +162,12 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::Config;
     use config::get_sample_config;
+    use config::Config;
 
-    use crate::source::RouteSource;
-    use crate::{CostType, Route};
-    use crate::source::bungee::BungeeClient;
     use crate::source::bungee::types::GetQuoteRequest;
+    use crate::source::RouteSource;
+    use crate::{BungeeClient, CostType, Route};
 
     fn setup() -> (Config, BungeeClient) {
         let config = get_sample_config();

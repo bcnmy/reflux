@@ -167,18 +167,18 @@ mod tests {
             }
         }
 
-        async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+        async fn get_multiple(&self, _: &Vec<String>) -> Result<Vec<String>, Self::Error> {
             todo!()
         }
 
-        async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error> {
+        async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
             self.map
                 .borrow_mut()
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
             Ok(())
         }
 
-        async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
             todo!()
         }
     }

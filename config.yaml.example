@@ -68,15 +68,11 @@ coingecko:
   expiry_sec: 300
 infra:
   redis_url: redis://localhost:6379
-  rabbitmq_url: amqp://localhost:5672
   mongo_url: mongodb://127.0.0.1:27017
 server:
   port: 8080
   host: localhost
 indexer_config:
-  is_indexer: true
   indexer_update_topic: indexer_update
   indexer_update_message: message
-  schedule: "* */6 * * *"
   points_per_bucket: 3
-

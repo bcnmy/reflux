@@ -261,6 +261,14 @@ impl Ord for BucketConfig {
     }
 }
 
+impl BucketConfig {
+    pub fn get_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
+}
+
 // Implementation for treating a BucketConfig as a key in a k-v pair
 impl Hash for BucketConfig {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -280,13 +288,7 @@ impl Hash for BucketConfig {
 
 impl PartialEq<Self> for BucketConfig {
     fn eq(&self, other: &Self) -> bool {
-        let mut s1 = DefaultHasher::new();
-        let mut s2 = DefaultHasher::new();
-
-        self.hash(&mut s1);
-        other.hash(&mut s2);
-
-        s1.finish() == s2.finish()
+        self.get_hash() == other.get_hash()
     }
 }
 
@@ -399,9 +401,6 @@ pub struct InfraConfig {
     // The URL of the Redis
     #[validate(pattern = r"redis://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
     pub redis_url: String,
-    // The URL of the RabbitMQ
-    #[validate(pattern = r"amqp://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
-    pub rabbitmq_url: String,
     // The URL of the MongoDB
     #[validate(pattern = r"mongodb://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
     pub mongo_url: String,
@@ -420,16 +419,11 @@ pub struct ServerConfig {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct IndexerConfig {
-    pub is_indexer: bool,
-
     #[validate(min_length = 1)]
     pub indexer_update_topic: String,
 
     #[validate(min_length = 1)]
     pub indexer_update_message: String,
-
-    #[validate(min_length = 1)]
-    pub schedule: String,
 
     #[validate(minimum = 2)]
     pub points_per_bucket: u64,
@@ -440,13 +434,13 @@ pub fn get_sample_config() -> Config {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use crate::config::{Config, ConfigError};
     use crate::get_sample_config;
 
     #[test]
     fn test_config_parsing() {
-        let config = get_sample_config();
+        get_sample_config();
     }
 
     #[test]
@@ -475,7 +469,6 @@ coingecko:
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
-    rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
@@ -484,7 +477,6 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
-    schedule: "*"
     points_per_bucket: 10
 "#;
         assert_eq!(
@@ -543,7 +535,6 @@ coingecko:
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
-    rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
@@ -552,7 +543,6 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
-    schedule: "*"
     points_per_bucket: 10
 "#;
 

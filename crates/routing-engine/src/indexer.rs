@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use futures::stream::StreamExt;
-use log::{debug, error, info, log};
+use log::{error, info};
 use thiserror::Error;
 
 use config::config::BucketConfig;
 
-use crate::{estimator, source, token_price, CostType, Route, RouteError};
+use crate::{CostType, estimator, Route, RouteError, source, token_price};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -61,15 +61,26 @@ impl<
         bucket: &'config BucketConfig,
         cost_type: &CostType,
     ) -> Result<Estimator, BuildEstimatorError<'config, 'est_de, Estimator>> {
-        info!("Building estimator for bucket: {:?}", bucket);
+        let bucket_id = bucket.get_hash();
+        info!("Building estimator for bucket: {:?} with ID: {}", bucket, bucket_id);
 
         // Generate Data to "Train" Estimator
         let observation_points = self.generate_bucket_observation_points(bucket);
-        info!("{} Observation points generated", observation_points.len());
+        let observation_points_len = observation_points.len();
 
-        let data_points = futures::stream::iter(observation_points)
-            .map(|input_value_in_usd: f64| {
+        info!("BucketID-{}: {} Observation points generated", bucket_id, observation_points.len());
+
+        let data_points = futures::stream::iter(observation_points.into_iter().enumerate())
+            .map(|(idx, input_value_in_usd)| {
                 async move {
+                    info!(
+                        "BucketID-{}: Building Point {} {}/{}",
+                        bucket_id,
+                        input_value_in_usd,
+                        idx + 1,
+                        observation_points_len
+                    );
+
                     // Convert input_value_in_usd to token_amount_in_wei
                     let from_token_amount_in_wei =
                         token_price::utils::get_token_amount_from_value_in_usd(
@@ -90,6 +101,14 @@ impl<
                         .fetch_least_route_cost_in_usd(&route, from_token_amount_in_wei, cost_type)
                         .await
                         .map_err(|err| IndexerErrors::RouteSourceError(err))?;
+
+                    info!(
+                        "BucketID-{}: Point {} {}/{} Built",
+                        bucket_id,
+                        input_value_in_usd,
+                        idx + 1,
+                        observation_points_len
+                    );
 
                     Ok::<
                         estimator::DataPoint<f64, f64>,
@@ -115,6 +134,13 @@ impl<
             >>()
             .await;
 
+        info!(
+            "BucketID-{}: Points successfully built: {}/{}",
+            bucket_id,
+            data_points.len(),
+            observation_points_len
+        );
+
         let (data_points, failed): (Vec<Result<_, _>>, Vec<Result<_, _>>) =
             data_points.into_iter().partition(|r| r.is_ok());
 
@@ -125,17 +151,16 @@ impl<
         > = failed.into_iter().map(|r| r.unwrap_err()).collect();
 
         if failed.len() > 0 {
-            let err = format!("Failed to fetch some data points: {:?}", failed);
-            error!("Failed to fetch some data points: {:?}", failed);
+            error!("BucketID-{}: Failed to fetch some data points: {:?}", bucket_id, failed);
         }
 
         if data_points.is_empty() {
-            error!("No data points remain for bucket: {:?}", bucket);
+            error!("BucketID-{}: No data points were built", bucket_id);
             return Err(BuildEstimatorError::NoDataPoints(bucket));
         }
 
         // Build the Estimator
-        info!("All data points fetched, building estimator for bucket: {:?}", bucket);
+        info!("BucketID-{}:All data points fetched, building estimator...", bucket_id);
         let estimator = Estimator::build(data_points)
             .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket, e))?;
         Ok(estimator)
@@ -186,7 +211,7 @@ impl<
         let (estimators, failed_estimators): (Vec<_>, Vec<_>) = futures::stream::iter(
             self.config.buckets.iter(),
         )
-        .map(|bucket| async {
+        .map(|bucket: &_| async {
             // Build the Estimator
             let estimator = self.build_estimator(bucket, &CostType::Fee).await?;
 
@@ -280,14 +305,13 @@ mod tests {
     use derive_more::Display;
     use thiserror::Error;
 
-    use config::{get_sample_config, Config};
+    use config::{Config, get_sample_config};
     use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
 
+    use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
-    use crate::source::bungee::BungeeClient;
     use crate::token_price::TokenPriceProvider;
-    use crate::CostType;
 
     #[derive(Error, Display, Debug)]
     struct Err;
@@ -297,7 +321,7 @@ mod tests {
     impl KeyValueStore for ModelStoreStub {
         type Error = Err;
 
-        async fn get(&self, k: &String) -> Result<String, Self::Error> {
+        async fn get(&self, _: &String) -> Result<String, Self::Error> {
             Ok("Get".to_string())
         }
 
@@ -305,11 +329,11 @@ mod tests {
             Ok(vec!["Get".to_string(); k.len()])
         }
 
-        async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error> {
+        async fn set(&self, _: &String, _: &String, _: Duration) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
             Ok(())
         }
     }
@@ -319,14 +343,14 @@ mod tests {
     impl MessageQueue for ProducerStub {
         type Error = Err;
 
-        async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        async fn publish(&self, _: &str, _: &str) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn subscribe<String>(
             &self,
-            topic: &str,
-            callback: impl FnMut(Msg) -> ControlFlow<String>,
+            _: &str,
+            _: impl FnMut(Msg) -> ControlFlow<String>,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -337,7 +361,7 @@ mod tests {
     impl TokenPriceProvider for TokenPriceProviderStub {
         type Error = Error;
 
-        async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error> {
+        async fn get_token_price(&self, _token_symbol: &String) -> Result<f64, Self::Error> {
             Ok(1.0) // USDC
         }
     }
@@ -385,7 +409,7 @@ mod tests {
             mut message_producer,
             mut token_price_provider,
         ) = setup();
-        let mut indexer = Indexer::new(
+        let indexer = Indexer::new(
             &config,
             &bungee_client,
             &mut model_store,

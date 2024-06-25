@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fmt::Debug;
+use std::future;
 use std::time::Duration;
 
 pub use ::redis::{ControlFlow, Msg};
@@ -15,19 +16,34 @@ mod redis;
 pub trait KeyValueStore: Debug {
     type Error: Error + Debug;
 
-    async fn get(&self, k: &String) -> Result<String, Self::Error>;
+    fn get(&self, k: &String) -> impl future::Future<Output = Result<String, Self::Error>>;
 
-    async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error>;
+    fn get_multiple(
+        &self,
+        k: &Vec<String>,
+    ) -> impl future::Future<Output = Result<Vec<String>, Self::Error>>;
 
-    async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error>;
+    fn set(
+        &self,
+        k: &String,
+        v: &String,
+        expiry: Duration,
+    ) -> impl future::Future<Output = Result<(), Self::Error>>;
 
-    async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error>;
+    fn set_multiple(
+        &self,
+        kv: &Vec<(String, String)>,
+    ) -> impl future::Future<Output = Result<(), Self::Error>>;
 }
 
 pub trait MessageQueue: Debug {
     type Error: Error + Debug;
 
-    async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error>;
+    fn publish(
+        &self,
+        topic: &str,
+        message: &str,
+    ) -> impl future::Future<Output = Result<(), Self::Error>>;
 
     fn subscribe<U>(
         &self,
