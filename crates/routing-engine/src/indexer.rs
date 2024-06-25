@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use derive_more::Display;
 use futures::stream::StreamExt;
-use log::{debug, error, info, log};
+use log::{error, info, log};
 use thiserror::Error;
 
 use config::config::BucketConfig;
 
 use crate::{CostType, estimator, Route, RouteError, source, token_price};
-use crate::engine::Estimator;
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -127,7 +125,6 @@ impl<
         > = failed.into_iter().map(|r| r.unwrap_err()).collect();
 
         if failed.len() > 0 {
-            let err = format!("Failed to fetch some data points: {:?}", failed);
             error!("Failed to fetch some data points: {:?}", failed);
         }
 
@@ -188,7 +185,7 @@ impl<
         let (estimators, failed_estimators): (Vec<_>, Vec<_>) = futures::stream::iter(
             self.config.buckets.iter(),
         )
-        .map(|bucket| async {
+        .map(|bucket: &_| async {
             // Build the Estimator
             let estimator = self.build_estimator(bucket, &CostType::Fee).await?;
 
@@ -327,8 +324,8 @@ mod tests {
 
         fn subscribe<String>(
             &self,
-            topic: &str,
-            callback: impl FnMut(Msg) -> ControlFlow<String>,
+            _topic: &str,
+            _callback: impl FnMut(Msg) -> ControlFlow<String>,
         ) -> Result<(), Self::Error> {
             Ok(())
         }
@@ -339,7 +336,7 @@ mod tests {
     impl TokenPriceProvider for TokenPriceProviderStub {
         type Error = Error;
 
-        async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error> {
+        async fn get_token_price(&self, _token_symbol: &String) -> Result<f64, Self::Error> {
             Ok(1.0) // USDC
         }
     }
@@ -387,7 +384,7 @@ mod tests {
             mut message_producer,
             mut token_price_provider,
         ) = setup();
-        let mut indexer = Indexer::new(
+        let indexer = Indexer::new(
             &config,
             &bungee_client,
             &mut model_store,

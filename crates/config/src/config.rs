@@ -472,7 +472,6 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
-    schedule: "*"
     points_per_bucket: 10
 "#;
         assert_eq!(
@@ -539,7 +538,6 @@ indexer_config:
     is_indexer: true
     indexer_update_topic: indexer_update
     indexer_update_message: message
-    schedule: "*"
     points_per_bucket: 10
 "#;
 

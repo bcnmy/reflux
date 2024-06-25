@@ -5,7 +5,6 @@ use reqwest::header;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-use config::config::BungeeConfig;
 use types::*;
 
 use crate::{CostType, Route};

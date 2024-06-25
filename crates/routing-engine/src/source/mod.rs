@@ -11,7 +11,7 @@ pub mod bungee;
 
 type Calldata = String;
 
-pub(crate) trait RouteSource: Debug {
+pub trait RouteSource: Debug {
     type FetchRouteCostError: Debug + Error;
     type GenerateRouteCalldataError: Debug + Error;
 

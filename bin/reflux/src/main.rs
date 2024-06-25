@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::Method;
@@ -93,66 +92,35 @@ async fn run_server(config: Config) {
 async fn run_indexer(config: Config) {
     info!("Configuring Indexer");
 
-    let schedule = config.indexer_config.schedule.clone();
-    let scheduler = JobScheduler::new().await.expect("Failed to create scheduler");
+    let config = config;
 
-    let config = Arc::new(config);
+    let redis_provider = RedisClient::build(&config.infra.redis_url)
+        .await
+        .expect("Failed to instantiate redis client");
 
-    let job = Job::new_async(schedule.as_str(), move |uuid, mut l: JobScheduler| {
-        /*
-           TODO: I"m not sure why this works tbh
-           Observations:
-           1. If I don't use Arc, I get an error stating that the value is moved
-           2. If this closure (not the async block) is not move, I get an error stating that the value is moved
-           3. If I borrow config in this closure, I get a dangling reference error
-           A combination of using Arc and move in the closure seems to work, but I'm not sure why
-        */
+    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
+        .expect("Failed to Instantiate Bungee Client");
 
-        let config = Arc::clone(&config);
+    let token_price_provider = CoingeckoClient::new(
+        &config.coingecko.base_url,
+        &config.coingecko.api_key,
+        &redis_provider,
+        Duration::from_secs(config.coingecko.expiry_sec),
+    );
 
-        Box::pin(async move {
-            let redis_provider = RedisClient::build(&config.infra.redis_url)
-                .await
-                .expect("Failed to instantiate redis client");
+    let indexer: Indexer<BungeeClient, RedisClient, RedisClient, CoingeckoClient<RedisClient>> =
+        Indexer::new(
+            &config,
+            &bungee_client,
+            &redis_provider,
+            &redis_provider,
+            &token_price_provider,
+        );
 
-            let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
-                .expect("Failed to Instantiate Bungee Client");
-
-            let token_price_provider = CoingeckoClient::new(
-                &config.coingecko.base_url,
-                &config.coingecko.api_key,
-                &redis_provider,
-                Duration::from_secs(config.coingecko.expiry_sec),
-            );
-
-            let indexer: Indexer<
-                BungeeClient,
-                RedisClient,
-                RedisClient,
-                CoingeckoClient<RedisClient>,
-            > = Indexer::new(
-                &config,
-                &bungee_client,
-                &redis_provider,
-                &redis_provider,
-                &token_price_provider,
-            );
-
-            match indexer.run::<LinearRegressionEstimator>().await {
-                Ok(_) => info!("Indexer Job Completed"),
-                Err(e) => error!("Indexer Job Failed: {}", e),
-            };
-
-            let next_tick = l.next_tick_for_job(uuid).await;
-            match next_tick {
-                Ok(Some(ts)) => println!("Next time for the job is {:?}", ts),
-                _ => println!("Could not get next tick for the job"),
-            };
-        })
-    })
-    .expect("Failed to create job");
-
-    scheduler.add(job).await.expect("Failed to add job");
+    match indexer.run::<LinearRegressionEstimator>().await {
+        Ok(_) => info!("Indexer Job Completed"),
+        Err(e) => error!("Indexer Job Failed: {}", e),
+    };
 }
 
 async fn shutdown_signal() {

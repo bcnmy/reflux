@@ -18,7 +18,7 @@ pub mod indexer;
 mod source;
 
 #[derive(Debug, Error, Display)]
-enum CostType {
+pub enum CostType {
     Fee,
     // BridgingTime,
 }
@@ -65,7 +65,7 @@ impl<'a> Route<'a> {
 }
 
 #[derive(Debug, Error)]
-enum RouteError {
+pub enum RouteError {
     #[error("Chain not found while building route: {}", _0)]
     ChainNotFoundError(u32),
 
