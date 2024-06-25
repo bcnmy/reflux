@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::Method;
-use log::{error, info};
+use log::info;
 use tokio;
 use tokio::signal;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -11,11 +11,10 @@ use tower_http::cors::{Any, CorsLayer};
 use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
-use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use routing_engine::engine::RoutingEngine;
-use routing_engine::estimator::LinearRegressionEstimator;
+use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use storage::mongodb_provider::MongoDBProvider;
-use storage::RedisClient;
+use storage::{ControlFlow, MessageQueue, RedisClient};
 
 #[tokio::main]
 async fn main() {
@@ -29,6 +28,8 @@ async fn main() {
     } else {
         run_server(config).await;
     }
+
+    info!("Exiting Reflux");
 }
 
 async fn run_server(config: Config) {
@@ -70,8 +71,29 @@ async fn run_server(config: Config) {
     );
 
     // Initialize routing engine
-    let buckets = config.buckets;
-    let routing_engine = RoutingEngine::new(account_service.clone(), buckets);
+    let buckets = config.buckets.clone();
+    let redis_client = RedisClient::build(&config.infra.redis_url)
+        .await
+        .expect("Failed to instantiate redis client");
+    let routing_engine =
+        Arc::new(RoutingEngine::new(account_service.clone(), buckets, redis_client.clone()));
+
+    // Subscribe to cache update messages
+    let cache_update_topic = config.indexer_config.indexer_update_topic.clone();
+    let routing_engine_clone = Arc::clone(&routing_engine);
+    tokio::spawn(async move {
+        let redis_client = redis_client.clone();
+        redis_client
+            .subscribe(&cache_update_topic, move |_msg| {
+                info!("Received cache update notification");
+                let routing_engine_clone = Arc::clone(&routing_engine_clone);
+                tokio::spawn(async move {
+                    routing_engine_clone.refresh_cache().await;
+                });
+                ControlFlow::<()>::Continue
+            })
+            .unwrap();
+    });
 
     // API service controller
     let service_controller = ServiceController::new(account_service, routing_engine);
@@ -143,10 +165,10 @@ async fn run_indexer(config: Config) {
                 &token_price_provider,
             );
 
-            match indexer.run::<LinearRegressionEstimator>().await {
-                Ok(_) => info!("Indexer Job Completed"),
-                Err(e) => error!("Indexer Job Failed: {}", e),
-            };
+            // match indexer.run::<LinearRegressionEstimator>().await {
+            //     Ok(_) => info!("Indexer Job Completed"),
+            //     Err(e) => error!("Indexer Job Failed: {}", e),
+            // };
 
             let next_tick = l.next_tick_for_job(uuid).await;
             match next_tick {
