@@ -61,15 +61,26 @@ impl<
         bucket: &'config BucketConfig,
         cost_type: &CostType,
     ) -> Result<Estimator, BuildEstimatorError<'config, 'est_de, Estimator>> {
-        info!("Building estimator for bucket: {:?}", bucket);
+        let bucket_id = bucket.get_hash();
+        info!("Building estimator for bucket: {:?} with ID: {}", bucket, bucket_id);
 
         // Generate Data to "Train" Estimator
         let observation_points = self.generate_bucket_observation_points(bucket);
-        info!("{} Observation points generated", observation_points.len());
+        let observation_points_len = observation_points.len();
 
-        let data_points = futures::stream::iter(observation_points)
-            .map(|input_value_in_usd: f64| {
+        info!("BucketID-{}: {} Observation points generated", bucket_id, observation_points.len());
+
+        let data_points = futures::stream::iter(observation_points.into_iter().enumerate())
+            .map(|(idx, input_value_in_usd)| {
                 async move {
+                    info!(
+                        "BucketID-{}: Building Point {} {}/{}",
+                        bucket_id,
+                        input_value_in_usd,
+                        idx + 1,
+                        observation_points_len
+                    );
+
                     // Convert input_value_in_usd to token_amount_in_wei
                     let from_token_amount_in_wei =
                         token_price::utils::get_token_amount_from_value_in_usd(
@@ -90,6 +101,14 @@ impl<
                         .fetch_least_route_cost_in_usd(&route, from_token_amount_in_wei, cost_type)
                         .await
                         .map_err(|err| IndexerErrors::RouteSourceError(err))?;
+
+                    info!(
+                        "BucketID-{}: Point {} {}/{} Built",
+                        bucket_id,
+                        input_value_in_usd,
+                        idx + 1,
+                        observation_points_len
+                    );
 
                     Ok::<
                         estimator::DataPoint<f64, f64>,
@@ -115,6 +134,13 @@ impl<
             >>()
             .await;
 
+        info!(
+            "BucketID-{}: Points successfully built: {}/{}",
+            bucket_id,
+            data_points.len(),
+            observation_points_len
+        );
+
         let (data_points, failed): (Vec<Result<_, _>>, Vec<Result<_, _>>) =
             data_points.into_iter().partition(|r| r.is_ok());
 
@@ -125,16 +151,16 @@ impl<
         > = failed.into_iter().map(|r| r.unwrap_err()).collect();
 
         if failed.len() > 0 {
-            error!("Failed to fetch some data points: {:?}", failed);
+            error!("BucketID-{}: Failed to fetch some data points: {:?}", bucket_id, failed);
         }
 
         if data_points.is_empty() {
-            error!("No data points remain for bucket: {:?}", bucket);
+            error!("BucketID-{}: No data points were built", bucket_id);
             return Err(BuildEstimatorError::NoDataPoints(bucket));
         }
 
         // Build the Estimator
-        info!("All data points fetched, building estimator for bucket: {:?}", bucket);
+        info!("BucketID-{}:All data points fetched, building estimator...", bucket_id);
         let estimator = Estimator::build(data_points)
             .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket, e))?;
         Ok(estimator)

@@ -254,6 +254,14 @@ pub struct BucketConfig {
     pub token_amount_to_usd: f64,
 }
 
+impl BucketConfig {
+    pub fn get_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
+}
+
 // Implementation for treating a BucketConfig as a key in a k-v pair
 impl Hash for BucketConfig {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -273,13 +281,7 @@ impl Hash for BucketConfig {
 
 impl PartialEq<Self> for BucketConfig {
     fn eq(&self, other: &Self) -> bool {
-        let mut s1 = DefaultHasher::new();
-        let mut s2 = DefaultHasher::new();
-
-        self.hash(&mut s1);
-        other.hash(&mut s2);
-
-        s1.finish() == s2.finish()
+        self.get_hash() == other.get_hash()
     }
 }
 
