@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use axum::http::Method;
-use log::{error, info};
+use clap::Parser;
+use log::{debug, error, info};
 use tokio;
 use tokio::signal;
 use tower_http::cors::{Any, CorsLayer};
@@ -15,21 +16,44 @@ use routing_engine::estimator::LinearRegressionEstimator;
 use storage::mongodb_provider::MongoDBProvider;
 use storage::RedisClient;
 
+#[derive(Parser, Debug)]
+struct Args {
+    /// Run the Solver (default)
+    #[arg(short, long)]
+    solver: bool,
+
+    /// Run the Indexer
+    #[arg(short, long)]
+    indexer: bool,
+}
+
 #[tokio::main]
 async fn main() {
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
+    let mut args = Args::parse();
+    debug!("Args: {:?}", args);
+
+    if args.indexer && args.solver {
+        panic!("Cannot run both indexer and solver at the same time");
+    }
+
+    if !args.indexer && !args.solver {
+        args.solver = true;
+        debug!("Running Solver by default");
+    }
+
     // Load configuration from yaml
     let config = Config::from_file("config.yaml").expect("Failed to load config file");
 
-    if config.indexer_config.is_indexer {
+    if args.indexer {
         run_indexer(config).await;
-    } else {
-        run_server(config).await;
+    } else if args.solver {
+        run_solver(config).await;
     }
 }
 
-async fn run_server(config: Config) {
+async fn run_solver(config: Config) {
     info!("Starting Reflux Server");
 
     let (app_host, app_port) = (config.server.host.clone(), config.server.port.clone());

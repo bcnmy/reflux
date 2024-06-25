@@ -412,8 +412,6 @@ pub struct ServerConfig {
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct IndexerConfig {
-    pub is_indexer: bool,
-
     #[validate(min_length = 1)]
     pub indexer_update_topic: String,
 

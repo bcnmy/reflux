@@ -144,7 +144,7 @@ impl RouteSource for BungeeClient {
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
 
-        info!("Route costs in USD: {:?}", route_costs_in_usd);
+        info!("Route costs in USD: {:?} for route {:?}", route_costs_in_usd, route);
 
         Ok(route_costs_in_usd.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap())
     }
