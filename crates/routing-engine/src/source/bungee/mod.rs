@@ -1,9 +1,10 @@
+use derive_more::Display;
+use log::{error, info};
 use reqwest;
 use reqwest::header;
 use ruint::aliases::U256;
 use thiserror::Error;
 
-use config::config::BungeeConfig;
 use types::*;
 
 use crate::{CostType, Route};
@@ -18,8 +19,9 @@ pub struct BungeeClient {
 }
 
 impl BungeeClient {
-    pub(crate) fn new(
-        BungeeConfig { base_url, api_key }: &BungeeConfig,
+    pub fn new<'config>(
+        base_url: &'config String,
+        api_key: &'config String,
     ) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);
@@ -34,6 +36,8 @@ impl BungeeClient {
         &self,
         params: GetQuoteRequest,
     ) -> Result<BungeeResponse<GetQuoteResponse>, BungeeClientError> {
+        info!("Fetching quote from bungee for {:?}", params);
+
         let response =
             self.client.get(self.base_url.to_owned() + "/quote").query(&params).send().await?;
         let raw_text = response.text().await?;
@@ -63,9 +67,14 @@ pub enum BungeeFetchRouteCostError {
     EstimationTypeNotImplementedError(#[from] CostType),
 }
 
+#[derive(Error, Debug, Display)]
+pub struct GenerateRouteCalldataError;
+
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
-    type GenerateRouteCalldataError = ();
+
+    // todo
+    type GenerateRouteCalldataError = GenerateRouteCalldataError;
 
     async fn fetch_least_route_cost_in_usd(
         &self,
@@ -73,9 +82,12 @@ impl RouteSource for BungeeClient {
         from_token_amount: U256,
         estimation_type: &CostType,
     ) -> Result<f64, Self::FetchRouteCostError> {
+        info!("Fetching least route cost in USD for route {:?} with token amount {} and estimation type {}", route, from_token_amount, estimation_type);
+
         // Build GetQuoteRequest
         let from_token = route.from_token.by_chain.get(&route.from_chain.id);
         if from_token.is_none() {
+            error!("Missing chain for token {} in config", route.from_token.symbol);
             return Err(BungeeFetchRouteCostError::MissingChainForTokenInConfigError(
                 route.from_chain.id,
                 route.from_token.symbol.clone(),
@@ -86,6 +98,7 @@ impl RouteSource for BungeeClient {
 
         let to_token = route.to_token.by_chain.get(&route.to_chain.id);
         if let None = to_token {
+            error!("Missing chain for token {} in config", route.to_token.symbol);
             return Err(BungeeFetchRouteCostError::MissingChainForTokenInConfigError(
                 route.to_chain.id,
                 route.to_token.symbol.clone(),
@@ -121,22 +134,24 @@ impl RouteSource for BungeeClient {
                     route.total_gas_fees_in_usd + route.input_value_in_usd?
                         - route.output_value_in_usd?,
                 ),
-                _ => None,
             })
             .filter(|cost| cost.is_some())
             .map(|cost| cost.unwrap())
             .collect();
 
         if route_costs_in_usd.len() == 0 {
+            error!("No valid routes returned by Bungee API for route {:?}", route);
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
+
+        info!("Route costs in USD: {:?} for route {:?}", route_costs_in_usd, route);
 
         Ok(route_costs_in_usd.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap())
     }
 
     async fn generate_route_calldata(
         &self,
-        route: &Route<'_>,
+        _: &Route<'_>,
     ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
         todo!()
     }
@@ -149,69 +164,21 @@ mod tests {
     use ruint::Uint;
 
     use config::Config;
+    use config::get_sample_config;
 
-    use crate::{CostType, Route};
-    use crate::source::{BungeeClient, RouteSource};
+    use crate::{BungeeClient, CostType, Route};
     use crate::source::bungee::types::GetQuoteRequest;
+    use crate::source::RouteSource;
 
     fn setup() -> (Config, BungeeClient) {
-        // let config = config::Config::from_file("../../config.yaml").unwrap();
-        let mut config = config::Config::from_yaml_str(
-            r#"
-chains:
-  - id: 1
-    name: Ethereum
-    is_enabled: true
-  - id: 42161
-    name: Arbitrum
-    is_enabled: true
-tokens:
-  - symbol: USDC
-    is_enabled: true
-    by_chain:
-      1:
-        is_enabled: true
-        decimals: 6
-        address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-      42161:
-        is_enabled: true
-        decimals: 6
-        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
-buckets:
-  - from_chain_id: 1
-    to_chain_id: 42161
-    from_token: USDC
-    to_token: USDC
-    is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
-    token_amount_to_usd: 10
-bungee:
-  base_url: https://api.socket.tech/v2
-  api_key: <REDACTED>
-covalent:
-  base_url: 'https://api.bungee.exchange'
-  api_key: 'my-api'
-coingecko:
-  base_url: 'https://api.coingecko.com'
-  api_key: 'my-api'
-infra:
-  redis_url: 'redis://localhost:6379'
-  rabbitmq_url: 'amqp://localhost:5672'
-  mongo_url: 'mongodb://localhost:27017'
-server:
-  port: 8080
-  host: 'localhost'
-indexer_config:
-    is_indexer: true
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-        "#,
+        let config = get_sample_config();
+
+        let bungee_client = BungeeClient::new(
+            &"https://api.socket.tech/v2".to_string(),
+            &env::var("BUNGEE_API_KEY").unwrap().to_string(),
         )
         .unwrap();
 
-        config.bungee.api_key = env::var("BUNGEE_API_KEY").unwrap();
-
-        let bungee_client = BungeeClient::new(&config.bungee).unwrap();
         return (config, bungee_client);
     }
 

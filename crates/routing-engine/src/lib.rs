@@ -1,28 +1,29 @@
-use derive_more::{Display, From};
+use derive_more::Display;
 use thiserror::Error;
 
 use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
 pub use indexer::Indexer;
+pub use source::bungee::BungeeClient;
+pub use token_price::CoingeckoClient;
 
-// use route_fee_bucket::RouteFeeBucket;
 pub mod engine;
 pub mod route_fee_bucket;
-mod traits;
-
 #[cfg(test)]
 mod tests;
 pub mod token_price;
+mod traits;
 
 pub mod estimator;
 pub mod indexer;
 mod source;
 
 #[derive(Debug, Error, Display)]
-enum CostType {
+pub enum CostType {
     Fee,
-    BridgingTime,
+    // BridgingTime,
 }
 
+#[derive(Debug)]
 pub struct Route<'a> {
     from_chain: &'a ChainConfig,
     to_chain: &'a ChainConfig,
@@ -63,11 +64,11 @@ impl<'a> Route<'a> {
     }
 }
 
-#[derive(Debug, Display, From)]
-enum RouteError {
-    #[display("Chain not found while building route: {}", _0)]
+#[derive(Debug, Error)]
+pub enum RouteError {
+    #[error("Chain not found while building route: {}", _0)]
     ChainNotFoundError(u32),
 
-    #[display("Token not found while building route: {}", _0)]
+    #[error("Token not found while building route: {}", _0)]
     TokenNotFoundError(String),
 }

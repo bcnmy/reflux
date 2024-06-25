@@ -1,10 +1,13 @@
-use crate::route_fee_bucket::RouteFeeBucket;
-use account_aggregation::service::AccountAggregationService;
-use account_aggregation::types::Balance;
-use derive_more::Display;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+
+use account_aggregation::service::AccountAggregationService;
+use account_aggregation::types::Balance;
+
+use crate::route_fee_bucket::RouteFeeBucket;
 
 #[derive(Serialize, Deserialize, Debug, Display, PartialEq, Clone)]
 #[display(

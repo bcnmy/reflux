@@ -22,4 +22,4 @@ Cargo.lock
 
 *.env
 *.swp
-config.yaml
+*.yaml
