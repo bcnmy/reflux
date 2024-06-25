@@ -10,11 +10,11 @@ pub struct ServiceController {
 }
 
 impl ServiceController {
-    pub fn new(account_service: AccountAggregationService, routing_engine: RoutingEngine) -> Self {
-        Self {
-            account_service: Arc::new(account_service),
-            routing_engine: Arc::new(routing_engine),
-        }
+    pub fn new(
+        account_service: AccountAggregationService,
+        routing_engine: Arc<RoutingEngine>,
+    ) -> Self {
+        Self { account_service: Arc::new(account_service), routing_engine }
     }
 
     pub fn router(self) -> Router {

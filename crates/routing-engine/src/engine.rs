@@ -2,11 +2,15 @@ use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
 use config::config::BucketConfig;
 use derive_more::Display;
+use futures::stream::{self, StreamExt};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
+use storage::RedisClient;
+use tokio::sync::RwLock;
 
 use crate::estimator::{Estimator, LinearRegressionEstimator};
 
@@ -29,17 +33,42 @@ pub struct Route {
 #[derive(Debug)]
 struct PathQuery(u32, u32, String, String);
 
+/// Routing Engine
+/// This struct is responsible for calculating the best cost path for a user
+#[derive(Debug, Clone)]
 pub struct RoutingEngine {
     buckets: Vec<BucketConfig>,
     aas_client: AccountAggregationService,
-    cache: Arc<HashMap<String, String>>, // (hash(bucket), hash(estimator_value)
+    cache: Arc<RwLock<HashMap<String, String>>>, // (hash(bucket), hash(estimator_value)
+    redis_client: RedisClient,
 }
 
 impl RoutingEngine {
-    pub fn new(aas_client: AccountAggregationService, buckets: Vec<BucketConfig>) -> Self {
-        let cache = Arc::new(HashMap::new());
+    pub fn new(
+        aas_client: AccountAggregationService,
+        buckets: Vec<BucketConfig>,
+        redis_client: RedisClient,
+    ) -> Self {
+        let cache = Arc::new(RwLock::new(HashMap::new()));
 
-        Self { aas_client, cache, buckets }
+        Self { aas_client, cache, buckets, redis_client }
+    }
+
+    pub async fn refresh_cache(&self) {
+        match self.redis_client.get_all_key_values().await {
+            Ok(kv_pairs) => {
+                info!("Refreshing cache from Redis.");
+                let mut cache = self.cache.write().await;
+                cache.clear();
+                for (key, value) in kv_pairs.iter() {
+                    cache.insert(key.clone(), value.clone());
+                }
+                info!("Cache refreshed with latest data from Redis.");
+            }
+            Err(e) => {
+                error!("Failed to refresh cache from Redis: {}", e);
+            }
+        }
     }
 
     /// Get the best cost path for a user
@@ -66,21 +95,23 @@ impl RoutingEngine {
         // Sort direct assets by A^x / C^y, here x=2 and y=1
         let x = 2.0;
         let y = 1.0;
-        let mut sorted_assets: Vec<(&&Balance, f64)> = direct_assets
-            .iter()
-            .map(|balance| {
-                let fee_cost = self.get_cached_data(
-                    balance.amount_in_usd, // todo: edit
-                    PathQuery(
-                        balance.chain_id,
-                        to_chain,
-                        balance.token.to_string(),
-                        to_token.to_string(),
-                    ),
-                );
+        let mut sorted_assets: Vec<(&&Balance, f64)> = stream::iter(direct_assets.iter())
+            .then(|balance| async move {
+                let fee_cost = self
+                    .get_cached_data(
+                        balance.amount_in_usd,
+                        PathQuery(
+                            balance.chain_id,
+                            to_chain,
+                            balance.token.to_string(),
+                            to_token.to_string(),
+                        ),
+                    )
+                    .await;
                 (balance, fee_cost)
             })
-            .collect();
+            .collect()
+            .await;
 
         sorted_assets.sort_by(|a, b| {
             let cost_a = (a.0.amount.powf(x)) / (a.1.powf(y));
@@ -116,21 +147,23 @@ impl RoutingEngine {
         if total_amount_needed > 0.0 {
             let swap_assets: Vec<&Balance> =
                 user_balances.iter().filter(|balance| balance.token != to_token).collect();
-            let mut sorted_assets: Vec<(&&Balance, f64)> = swap_assets
-                .iter()
-                .map(|balance| {
-                    let fee_cost = self.get_cached_data(
-                        balance.amount_in_usd,
-                        PathQuery(
-                            balance.chain_id,
-                            to_chain,
-                            balance.token.clone(),
-                            to_token.to_string(),
-                        ),
-                    );
+            let mut sorted_assets: Vec<(&&Balance, f64)> = stream::iter(swap_assets.iter())
+                .then(|balance| async move {
+                    let fee_cost = self
+                        .get_cached_data(
+                            balance.amount_in_usd,
+                            PathQuery(
+                                balance.chain_id,
+                                to_chain,
+                                balance.token.clone(),
+                                to_token.to_string(),
+                            ),
+                        )
+                        .await;
                     (balance, fee_cost)
                 })
-                .collect();
+                .collect()
+                .await;
 
             sorted_assets.sort_by(|a, b| {
                 let cost_a = (a.0.amount.powf(x)) / (a.1.powf(y));
@@ -167,8 +200,7 @@ impl RoutingEngine {
         selected_assets
     }
 
-    fn get_cached_data(&self, target_amount: f64, path: PathQuery) -> f64 {
-        // filter the bucket of (chain, token) and sort with token_amount_from_usd
+    async fn get_cached_data(&self, target_amount: f64, path: PathQuery) -> f64 {
         let mut buckets_array: Vec<BucketConfig> = self
             .buckets
             .clone()
@@ -190,11 +222,12 @@ impl RoutingEngine {
             })
             .unwrap();
 
-        // todo: should throw error if not found in bucket range or unwrap or with last bucket
         let mut s = DefaultHasher::new();
         bucket.hash(&mut s);
         let key = s.finish().to_string();
-        let value = self.cache.get(&key).unwrap();
+
+        let cache = self.cache.read().await;
+        let value = cache.get(&key).unwrap();
         let estimator: Result<LinearRegressionEstimator, serde_json::Error> =
             serde_json::from_str(value);
 
@@ -227,6 +260,7 @@ mod tests {
         hash::{DefaultHasher, Hash, Hasher},
     };
     use storage::mongodb_provider::MongoDBProvider;
+    use tokio::sync::RwLock;
 
     #[tokio::test]
     async fn test_get_cached_data() {
@@ -285,14 +319,21 @@ mod tests {
             "https://api.covalent.com".to_string(),
             "my-api".to_string(),
         );
-        let routing_engine = RoutingEngine { aas_client, buckets, cache: Arc::new(cache) };
+        let redis_client =
+            storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
+        let routing_engine = RoutingEngine {
+            aas_client,
+            buckets,
+            cache: Arc::new(RwLock::new(cache)),
+            redis_client,
+        };
 
         // Define the target amount and path query
         let target_amount = 5.0;
         let path_query = PathQuery(1, 2, "USDC".to_string(), "ETH".to_string());
 
         // Call get_cached_data and assert the result
-        let result = routing_engine.get_cached_data(target_amount, path_query);
+        let result = routing_engine.get_cached_data(target_amount, path_query).await;
         assert!(result > 0.0);
         assert_eq!(result, dummy_estimator.estimate(target_amount));
     }
@@ -359,7 +400,15 @@ mod tests {
         let mut cache = HashMap::new();
         cache.insert(key, serialized_estimator.clone());
         cache.insert(key2, serialized_estimator);
-        let routing_engine = RoutingEngine { aas_client, buckets, cache: Arc::new(cache) };
+
+        let redis_client =
+            storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
+        let routing_engine = RoutingEngine {
+            aas_client,
+            buckets,
+            cache: Arc::new(RwLock::new(cache)),
+            redis_client,
+        };
 
         // should have USDT in bsc-mainnet > $0.5
         let dummy_user_address = "0x00000ebe3fa7cb71aE471547C836E0cE0AE758c2";
