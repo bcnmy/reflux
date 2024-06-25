@@ -391,9 +391,6 @@ pub struct InfraConfig {
     // The URL of the Redis
     #[validate(pattern = r"redis://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
     pub redis_url: String,
-    // The URL of the RabbitMQ
-    #[validate(pattern = r"amqp://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
-    pub rabbitmq_url: String,
     // The URL of the MongoDB
     #[validate(pattern = r"mongodb://[-a-zA-Z0-9@:%._\+~#=]{1,256}")]
     pub mongo_url: String,
@@ -460,7 +457,6 @@ coingecko:
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
-    rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
@@ -526,7 +522,6 @@ coingecko:
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
-    rabbitmq_url: 'amqp://localhost:5672'
     mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
