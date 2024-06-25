@@ -3,12 +3,11 @@ use account_aggregation::types::Balance;
 use config::config::BucketConfig;
 use derive_more::Display;
 use futures::stream::{self, StreamExt};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 use storage::RedisClient;
 use tokio::sync::RwLock;
@@ -81,22 +80,22 @@ impl RoutingEngine {
         to_token: &str,
         to_value: f64,
     ) -> Vec<Route> {
-        println!(
-            "user: {}, to_chain: {}, to_token: {}, to_value: {}\n",
+        debug!(
+            "Getting best cost path for user: {}, to_chain: {}, to_token: {}, to_value: {}",
             account, to_chain, to_token, to_value
         );
         let user_balances = self.get_user_balance_from_agg_service(&account).await;
-        // println!("User balances: {:?}\n", user_balances);
+        debug!("User balances: {:?}", user_balances);
 
         // todo: for account aggregation, transfer same chain same asset first
         let direct_assets: Vec<_> =
             user_balances.iter().filter(|balance| balance.token == to_token).collect();
-        // println!("\nDirect assets: {:?}\n", direct_assets);
+        debug!("Direct assets: {:?}", direct_assets);
 
         // Sort direct assets by A^x / C^y, here x=2 and y=1
         let x = 2.0;
         let y = 1.0;
-        let mut sorted_assets: Vec<(&&Balance, f64)> = stream::iter(direct_assets.iter())
+        let mut sorted_assets: Vec<(&Balance, f64)> = stream::iter(direct_assets.into_iter())
             .then(|balance| async move {
                 let fee_cost = self
                     .get_cached_data(
@@ -148,7 +147,7 @@ impl RoutingEngine {
         if total_amount_needed > 0.0 {
             let swap_assets: Vec<&Balance> =
                 user_balances.iter().filter(|balance| balance.token != to_token).collect();
-            let mut sorted_assets: Vec<(&&Balance, f64)> = stream::iter(swap_assets.iter())
+            let mut sorted_assets: Vec<(&Balance, f64)> = stream::iter(swap_assets.into_iter())
                 .then(|balance| async move {
                     let fee_cost = self
                         .get_cached_data(
@@ -195,8 +194,11 @@ impl RoutingEngine {
             }
         }
 
-        println!("\n Selected assets path: {:?}", selected_assets);
-        println!("Total cost: {}", total_cost);
+        debug!("Selected assets: {:?}", selected_assets);
+        info!(
+            "Total cost for user: {} on chain {} to token {} is {}",
+            account, to_chain, to_token, total_cost
+        );
 
         selected_assets
     }
@@ -223,9 +225,7 @@ impl RoutingEngine {
             })
             .unwrap();
 
-        let mut s = DefaultHasher::new();
-        bucket.hash(&mut s);
-        let key = s.finish().to_string();
+        let key = bucket.get_hash().to_string();
 
         let cache = self.cache.read().await;
         let value = cache.get(&key).unwrap();
@@ -254,12 +254,9 @@ mod tests {
     };
     use account_aggregation::service::AccountAggregationService;
     use config::BucketConfig;
+    use std::collections::HashMap;
     use std::env;
     use std::sync::Arc;
-    use std::{
-        collections::HashMap,
-        hash::{DefaultHasher, Hash, Hasher},
-    };
     use storage::mongodb_provider::MongoDBProvider;
     use tokio::sync::RwLock;
 
@@ -297,9 +294,7 @@ mod tests {
         let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
 
         // Create a cache with a dummy bucket
-        let mut hasher = DefaultHasher::new();
-        buckets[0].hash(&mut hasher);
-        let key = hasher.finish().to_string();
+        let key = buckets[0].get_hash().to_string();
         let mut cache = HashMap::new();
         cache.insert(key, serialized_estimator);
 
@@ -392,14 +387,10 @@ mod tests {
         .unwrap();
         let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
         // Create a cache with a dummy bucket
-        let mut hasher = DefaultHasher::new();
-        buckets[0].hash(&mut hasher);
-        let key = hasher.finish().to_string();
-        let mut hasher = DefaultHasher::new();
-        buckets[1].hash(&mut hasher);
-        let key2 = hasher.finish().to_string();
+        let key1 = buckets[0].get_hash().to_string();
+        let key2 = buckets[1].get_hash().to_string();
         let mut cache = HashMap::new();
-        cache.insert(key, serialized_estimator.clone());
+        cache.insert(key1, serialized_estimator.clone());
         cache.insert(key2, serialized_estimator);
 
         let redis_client =

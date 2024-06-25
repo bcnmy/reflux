@@ -481,7 +481,6 @@ indexer_config:
 "#;
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
-                println!("{:?}", err);
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"chains\":{\"errors\":[\"The items must be unique.\"]}}}";
 

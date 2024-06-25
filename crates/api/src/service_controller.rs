@@ -65,7 +65,6 @@ impl ServiceController {
 
     /// Health check endpoint
     pub async fn status() -> impl IntoResponse {
-        println!("Service is running...");
         let response = json!({
             "message": "Service is running...",
             "status": "ok"
