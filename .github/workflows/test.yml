@@ -1,5 +1,5 @@
 name: Test Suite
-on: [ pull_request, push ]
+on: [ pull_request ]
 
 jobs:
   test:
@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mongodb:
-        image: mongo:6
+        image: mongo:latest
         ports:
           - 27017:27017
         options: >-
@@ -15,6 +15,10 @@ jobs:
           --health-interval=30s
           --health-timeout=10s
           --health-retries=10
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
