@@ -4,14 +4,13 @@ use std::future;
 use std::time::Duration;
 
 pub use ::redis::{ControlFlow, Msg};
+use mongodb::bson::Document;
 
-pub use redis::RedisClient;
+pub use redis_client::RedisClient;
 
-pub mod db_provider;
-pub mod errors;
-pub mod mongodb_provider;
+pub mod mongodb_client;
 
-mod redis;
+mod redis_client;
 
 pub trait KeyValueStore: Debug {
     type Error: Error + Debug;
@@ -50,4 +49,23 @@ pub trait MessageQueue: Debug {
         topic: &str,
         callback: impl FnMut(Msg) -> ControlFlow<U>,
     ) -> Result<(), Self::Error>;
+}
+
+pub trait DBProvider: Debug {
+    type Error: Error + Debug;
+
+    fn create(&self, item: &Document) -> impl future::Future<Output = Result<(), Self::Error>>;
+
+    fn read(
+        &self,
+        query: &Document,
+    ) -> impl future::Future<Output = Result<Option<Document>, Self::Error>>;
+
+    fn update(
+        &self,
+        query: &Document,
+        update: &Document,
+    ) -> impl future::Future<Output = Result<(), Self::Error>>;
+
+    fn delete(&self, query: &Document) -> impl future::Future<Output = Result<(), Self::Error>>;
 }

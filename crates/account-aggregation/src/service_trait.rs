@@ -1,13 +1,16 @@
-use async_trait::async_trait;
-use storage::mongodb_provider::MongoDBProvider;
-use crate::types::{Account, AddAccountPayload, Balance, RegisterAccountPayload};
 use std::error::Error;
+
+use async_trait::async_trait;
+
+use storage::mongodb_client::MongoDBClient;
+
+use crate::types::{Account, AddAccountPayload, Balance, RegisterAccountPayload};
 
 #[async_trait]
 pub trait AccountAggregationServiceTrait {
     fn new(
-        user_db_provider: MongoDBProvider,
-        account_mapping_db_provider: MongoDBProvider,
+        user_db_provider: MongoDBClient,
+        account_mapping_db_provider: MongoDBClient,
         base_url: String,
         api_key: String,
     ) -> Self;
