@@ -424,7 +424,7 @@ pub fn get_sample_config() -> Config {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use crate::config::{Config, ConfigError};
     use crate::get_sample_config;
 
