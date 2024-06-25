@@ -147,6 +147,8 @@ mod tests {
                 .unwrap();
         });
 
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
         let client = setup().await;
         client.publish("TOPIC", "HELLO").await.unwrap();
 
