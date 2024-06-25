@@ -4,7 +4,6 @@ use axum::http::Method;
 use log::{error, info};
 use tokio;
 use tokio::signal;
-use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::cors::{Any, CorsLayer};
 
 use account_aggregation::service::AccountAggregationService;

@@ -1,4 +1,4 @@
-use derive_more::{Display, From};
+use derive_more::Display;
 use thiserror::Error;
 
 use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};

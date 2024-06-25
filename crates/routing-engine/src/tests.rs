@@ -1,15 +1,14 @@
 use async_trait::async_trait;
-use mockall::predicate::*;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        engine::{Route, RoutingEngine},
-        traits::{AccountAggregation, RouteFee},
-    };
-    use account_aggregation::types::Balance;
     use mockall::mock;
+
+    use account_aggregation::types::Balance;
+
+    use crate::traits::{AccountAggregation, RouteFee};
+
+    use super::*;
 
     mock! {
         pub AccountAggregationService {}

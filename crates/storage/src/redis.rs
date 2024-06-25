@@ -2,11 +2,9 @@ use std::time::Duration;
 
 use log::info;
 use redis;
-use redis::{aio, AsyncCommands, Commands, ControlFlow, Msg, PubSubCommands};
+use redis::{aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
 use redis::RedisError;
 use thiserror::Error;
-
-use config;
 
 use crate::{KeyValueStore, MessageQueue};
 
@@ -135,7 +133,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pub_sub() {
-        let (tx, mut rx) = channel::<String>();
+        let (tx, rx) = channel::<String>();
         let client = setup().await;
 
         tokio::task::spawn_blocking(move || {
@@ -149,7 +147,7 @@ mod tests {
                 .unwrap();
         });
 
-        let mut client = setup().await;
+        let client = setup().await;
         client.publish("TOPIC", "HELLO").await.unwrap();
 
         loop {

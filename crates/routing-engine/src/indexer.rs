@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use futures::stream::StreamExt;
-use log::{error, info, log};
+use log::{error, info};
 use thiserror::Error;
 
 use config::config::BucketConfig;
@@ -282,10 +282,9 @@ mod tests {
     use config::{Config, get_sample_config};
     use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
 
-    use crate::CostType;
+    use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
-    use crate::source::BungeeClient;
     use crate::token_price::TokenPriceProvider;
 
     #[derive(Error, Display, Debug)]
@@ -296,7 +295,7 @@ mod tests {
     impl KeyValueStore for ModelStoreStub {
         type Error = Err;
 
-        async fn get(&self, k: &String) -> Result<String, Self::Error> {
+        async fn get(&self, _: &String) -> Result<String, Self::Error> {
             Ok("Get".to_string())
         }
 
@@ -304,11 +303,11 @@ mod tests {
             Ok(vec!["Get".to_string(); k.len()])
         }
 
-        async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error> {
+        async fn set(&self, _: &String, _: &String, _: Duration) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
+        async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
             Ok(())
         }
     }
@@ -318,14 +317,14 @@ mod tests {
     impl MessageQueue for ProducerStub {
         type Error = Err;
 
-        async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error> {
+        async fn publish(&self, _: &str, _: &str) -> Result<(), Self::Error> {
             Ok(())
         }
 
         fn subscribe<String>(
             &self,
-            _topic: &str,
-            _callback: impl FnMut(Msg) -> ControlFlow<String>,
+            _: &str,
+            _: impl FnMut(Msg) -> ControlFlow<String>,
         ) -> Result<(), Self::Error> {
             Ok(())
         }

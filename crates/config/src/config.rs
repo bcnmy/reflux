@@ -418,9 +418,6 @@ pub struct IndexerConfig {
     #[validate(min_length = 1)]
     pub indexer_update_message: String,
 
-    #[validate(min_length = 1)]
-    pub schedule: String,
-
     #[validate(minimum = 2)]
     pub points_per_bucket: u64,
 }
@@ -436,7 +433,7 @@ pub mod tests {
 
     #[test]
     fn test_config_parsing() {
-        let config = get_sample_config();
+        get_sample_config();
     }
 
     #[test]

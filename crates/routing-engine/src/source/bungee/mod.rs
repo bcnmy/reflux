@@ -134,7 +134,6 @@ impl RouteSource for BungeeClient {
                     route.total_gas_fees_in_usd + route.input_value_in_usd?
                         - route.output_value_in_usd?,
                 ),
-                _ => None,
             })
             .filter(|cost| cost.is_some())
             .map(|cost| cost.unwrap())
@@ -152,7 +151,7 @@ impl RouteSource for BungeeClient {
 
     async fn generate_route_calldata(
         &self,
-        route: &Route<'_>,
+        _: &Route<'_>,
     ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
         todo!()
     }
@@ -167,9 +166,9 @@ mod tests {
     use config::Config;
     use config::get_sample_config;
 
-    use crate::{CostType, Route};
-    use crate::source::{BungeeClient, RouteSource};
+    use crate::{BungeeClient, CostType, Route};
     use crate::source::bungee::types::GetQuoteRequest;
+    use crate::source::RouteSource;
 
     fn setup() -> (Config, BungeeClient) {
         let config = get_sample_config();
