@@ -490,6 +490,9 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     points_per_bucket: 10
+solver_config:
+  x_value: 2.0
+  y_value: 1.0
 "#;
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
@@ -555,6 +558,9 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     points_per_bucket: 10
+solver_config:
+  x_value: 2.0
+  y_value: 1.0
 "#;
 
         assert_eq!(
