@@ -101,8 +101,12 @@ async fn run_solver(config: Config) {
     let redis_client = RedisClient::build(&config.infra.redis_url)
         .await
         .expect("Failed to instantiate redis client");
-    let routing_engine =
-        Arc::new(RoutingEngine::new(account_service.clone(), buckets, redis_client.clone()));
+    let routing_engine = Arc::new(RoutingEngine::new(
+        account_service.clone(),
+        buckets,
+        redis_client.clone(),
+        config.solver_config,
+    ));
 
     // Subscribe to cache update messages
     let cache_update_topic = config.indexer_config.indexer_update_topic.clone();

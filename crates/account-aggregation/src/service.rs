@@ -1,4 +1,3 @@
-use log::debug;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -230,7 +229,6 @@ impl AccountAggregationService {
 
         let mut balances = Vec::new();
         let networks = self.networks.clone();
-        debug!("Networks: {:?}", networks);
 
         // todo: parallelize this
         for user in accounts.iter() {
@@ -239,14 +237,12 @@ impl AccountAggregationService {
                     "{}/v1/{}/address/{}/balances_v2/?key={}",
                     self.covalent_base_url, network, user, self.covalent_api_key
                 );
-                debug!("Requesting: {}", url);
                 let response = self.client.get(&url).send().await?;
                 let api_response: ApiResponse = response.json().await?;
                 let user_balances = extract_balance_data(api_response)?;
                 balances.extend(user_balances);
             }
         }
-        println!("{:?}", balances);
 
         Ok(balances)
     }

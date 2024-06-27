@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 use serde_valid::yaml::FromYamlStr;
+use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 
 // Config Type
 #[derive(Debug)]
@@ -29,6 +29,8 @@ pub struct Config {
     pub server: ServerConfig,
     // Configuration for the indexer
     pub indexer_config: IndexerConfig,
+    // Configuration for the solver
+    pub solver_config: SolverConfig,
 }
 
 impl Config {
@@ -126,6 +128,7 @@ impl Config {
             infra: raw_config.infra,
             server: raw_config.server,
             indexer_config: raw_config.indexer_config,
+            solver_config: raw_config.solver_config,
         })
     }
 }
@@ -228,6 +231,7 @@ pub struct RawConfig {
     pub infra: InfraConfig,
     pub server: ServerConfig,
     pub indexer_config: IndexerConfig,
+    pub solver_config: SolverConfig,
 }
 
 #[derive(Debug, Deserialize, Validate, PartialOrd, Clone)]
@@ -427,6 +431,14 @@ pub struct IndexerConfig {
 
     #[validate(minimum = 2)]
     pub points_per_bucket: u64,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct SolverConfig {
+    #[validate(minimum = 1.0)]
+    pub x_value: f64,
+    #[validate(minimum = 1.0)]
+    pub y_value: f64,
 }
 
 pub fn get_sample_config() -> Config {

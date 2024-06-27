@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 
 use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
-use config::config::BucketConfig;
+use config::{config::BucketConfig, SolverConfig};
 use storage::{RedisClient, RedisClientError};
 
 use crate::estimator::{Estimator, LinearRegressionEstimator};
@@ -51,12 +51,13 @@ pub enum RoutingEngineError {
 
 /// Routing Engine
 /// This struct is responsible for calculating the best cost path for a user
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RoutingEngine {
     buckets: Vec<BucketConfig>,
     aas_client: AccountAggregationService,
     cache: Arc<RwLock<HashMap<String, String>>>, // (hash(bucket), hash(estimator_value)
     redis_client: RedisClient,
+    estimates: SolverConfig,
 }
 
 impl RoutingEngine {
@@ -64,10 +65,11 @@ impl RoutingEngine {
         aas_client: AccountAggregationService,
         buckets: Vec<BucketConfig>,
         redis_client: RedisClient,
+        solver_config: SolverConfig,
     ) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
 
-        Self { aas_client, cache, buckets, redis_client }
+        Self { aas_client, cache, buckets, redis_client, estimates: solver_config }
     }
 
     pub async fn refresh_cache(&self) {
@@ -110,8 +112,8 @@ impl RoutingEngine {
         debug!("Direct assets: {:?}", direct_assets);
 
         // Sort direct assets by A^x / C^y, here x=2 and y=1
-        let x = 2.0;
-        let y = 1.0;
+        let x = self.estimates.x_value;
+        let y = self.estimates.y_value;
         let mut sorted_assets: Vec<(&Balance, f64)> = stream::iter(direct_assets.into_iter())
             .then(|balance| async move {
                 let fee_cost = self
@@ -283,7 +285,7 @@ mod tests {
     use tokio::sync::RwLock;
 
     use account_aggregation::service::AccountAggregationService;
-    use config::BucketConfig;
+    use config::{BucketConfig, SolverConfig};
     use storage::mongodb_client::MongoDBClient;
 
     use crate::engine::PathQuery;
@@ -350,11 +352,16 @@ mod tests {
         );
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
+        let estimates = SolverConfig {
+            x_value: 2.0,
+            y_value: 1.0,
+        };
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
             cache: Arc::new(RwLock::new(cache)),
             redis_client,
+            estimates,
         };
 
         // Define the target amount and path query
@@ -429,11 +436,16 @@ mod tests {
 
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
+            let estimates = SolverConfig {
+                x_value: 2.0,
+                y_value: 1.0,
+            };
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
             cache: Arc::new(RwLock::new(cache)),
             redis_client,
+            estimates,
         };
 
         // should have USDT in bsc-mainnet > $0.5
