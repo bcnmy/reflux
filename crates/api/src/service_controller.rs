@@ -10,11 +10,11 @@ pub struct ServiceController {
 }
 
 impl ServiceController {
-    pub fn new(account_service: AccountAggregationService, routing_engine: RoutingEngine) -> Self {
-        Self {
-            account_service: Arc::new(account_service),
-            routing_engine: Arc::new(routing_engine),
-        }
+    pub fn new(
+        account_service: AccountAggregationService,
+        routing_engine: Arc<RoutingEngine>,
+    ) -> Self {
+        Self { account_service: Arc::new(account_service), routing_engine }
     }
 
     pub fn router(self) -> Router {
@@ -65,7 +65,6 @@ impl ServiceController {
 
     /// Health check endpoint
     pub async fn status() -> impl IntoResponse {
-        println!("Service is running...");
         let response = json!({
             "message": "Service is running...",
             "status": "ok"
@@ -78,17 +77,24 @@ impl ServiceController {
         account_service: Arc<AccountAggregationService>,
         query: types::UserAccountMappingQuery,
     ) -> impl IntoResponse {
-        let user_id = account_service.get_user_id(&query.account).await;
-
-        let response = match user_id {
-            Some(user_id) => {
-                let accounts = account_service.get_user_accounts(&user_id).await;
-                json!({ "user_id": user_id, "accounts": accounts })
+        match account_service.get_user_id(&query.account).await {
+            Ok(Some(user_id)) => match account_service.get_user_accounts(&user_id).await {
+                Ok(Some(accounts)) => {
+                    (StatusCode::OK, Json(json!({ "user_id": user_id, "accounts": accounts })))
+                }
+                Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "Accounts not found" }))),
+                Err(err) => {
+                    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
+                }
+            },
+            Ok(None) => (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "User not found", "accounts": [query.account] })),
+            ),
+            Err(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
             }
-            None => json!({ "error": "User not found", "accounts": [query.account] }),
-        };
-
-        (StatusCode::OK, Json(response))
+        }
     }
 
     /// Register user account
@@ -130,12 +136,18 @@ impl ServiceController {
         routing_engine: Arc<RoutingEngine>,
         query: types::PathQuery,
     ) -> impl IntoResponse {
-        // todo: decide if we want to find with user_id in db or generic account also
-        let routes = routing_engine
+        match routing_engine
             .get_best_cost_path(&query.account, query.to_chain, &query.to_token, query.to_value)
-            .await;
-        let response = json!({ "routes": routes });
-
-        (StatusCode::OK, Json(response))
+            .await
+        {
+            Ok(routes) => {
+                let response = json!({ "routes": routes });
+                (StatusCode::OK, Json(response))
+            }
+            Err(err) => {
+                let response = json!({ "error": err.to_string() });
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
+            }
+        }
     }
 }

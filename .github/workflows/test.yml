@@ -1,5 +1,5 @@
 name: Test Suite
-on: [ pull_request ]
+on: [pull_request]
 
 jobs:
   test:
@@ -27,4 +27,5 @@ jobs:
     env:
       BUNGEE_API_KEY: ${{ secrets.BUNGEE_API_KEY }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+      COVALENT_API_KEY: ${{ secrets.COVALENT_API_KEY }}
     environment: Testing

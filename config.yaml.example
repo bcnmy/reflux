@@ -1,10 +1,12 @@
 chains:
   - id: 1
     name: Ethereum
+    covalent_name: eth-mainnet
     is_enabled: true
   - id: 42161
     name: Arbitrum
     is_enabled: true
+    covalent_name: bsc-mainnet
 tokens:
   - symbol: USDC
     is_enabled: true
@@ -74,4 +76,6 @@ indexer_config:
   indexer_update_topic: indexer_update
   indexer_update_message: message
   points_per_bucket: 3
-
+solver_config:
+  x_value: 2.0
+  y_value: 1.0

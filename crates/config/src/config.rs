@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 use serde_valid::yaml::FromYamlStr;
+use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 
 // Config Type
 #[derive(Debug)]
@@ -29,6 +29,8 @@ pub struct Config {
     pub server: ServerConfig,
     // Configuration for the indexer
     pub indexer_config: IndexerConfig,
+    // Configuration for the solver
+    pub solver_config: SolverConfig,
 }
 
 impl Config {
@@ -126,6 +128,7 @@ impl Config {
             infra: raw_config.infra,
             server: raw_config.server,
             indexer_config: raw_config.indexer_config,
+            solver_config: raw_config.solver_config,
         })
     }
 }
@@ -228,9 +231,10 @@ pub struct RawConfig {
     pub infra: InfraConfig,
     pub server: ServerConfig,
     pub indexer_config: IndexerConfig,
+    pub solver_config: SolverConfig,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, PartialOrd, Clone)]
 pub struct BucketConfig {
     // The source chain
     #[validate(minimum = 1)]
@@ -252,6 +256,13 @@ pub struct BucketConfig {
     // Upper bound of the token amount to be transferred from the source chain to the destination chain
     #[validate(minimum = 1.0)]
     pub token_amount_to_usd: f64,
+}
+
+impl Ord for BucketConfig {
+    // sort with token_amount_from_usd
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.token_amount_from_usd.partial_cmp(&other.token_amount_from_usd).unwrap()
+    }
 }
 
 impl BucketConfig {
@@ -297,6 +308,9 @@ pub struct ChainConfig {
     pub name: String,
     // If the chain is enabled or now
     pub is_enabled: bool,
+    // The name of the chain in Covalent API
+    #[validate(min_length = 1)]
+    pub covalent_name: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -419,6 +433,14 @@ pub struct IndexerConfig {
     pub points_per_bucket: u64,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct SolverConfig {
+    #[validate(minimum = 1.0)]
+    pub x_value: f64,
+    #[validate(minimum = 1.0)]
+    pub y_value: f64,
+}
+
 pub fn get_sample_config() -> Config {
     Config::from_file("../../config.yaml.example").unwrap()
 }
@@ -440,9 +462,11 @@ chains:
   - id: 1
     name: Ethereum
     is_enabled: true
+    covalent_name: eth-mainnet
   - id: 1
     name: Ethereum
     is_enabled: true
+    covalent_name: eth-mainnet
 tokens:
 buckets:
 bungee:
@@ -466,6 +490,9 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     points_per_bucket: 10
+solver_config:
+  x_value: 2.0
+  y_value: 1.0
 "#;
         assert_eq!(
             if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
@@ -531,6 +558,9 @@ indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
     points_per_bucket: 10
+solver_config:
+  x_value: 2.0
+  y_value: 1.0
 "#;
 
         assert_eq!(

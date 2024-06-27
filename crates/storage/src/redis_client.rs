@@ -1,14 +1,12 @@
-use std::time::Duration;
-
+use crate::{KeyValueStore, MessageQueue};
 use log::info;
-use redis;
-use redis::{aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
 use redis::RedisError;
+use redis::{self, aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
+use std::collections::HashMap;
+use std::time::Duration;
 use thiserror::Error;
 
-use crate::{KeyValueStore, MessageQueue};
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RedisClient {
     client: redis::Client,
     connection: aio::MultiplexedConnection,
@@ -19,6 +17,20 @@ impl RedisClient {
         let client = redis::Client::open(redis_url.clone())?;
         let connection = client.get_multiplexed_async_connection().await?;
         Ok(RedisClient { client, connection })
+    }
+
+    pub async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+        info!("Fetching all keys");
+        let keys: Vec<String> = self.connection.clone().keys("*").await?;
+        Ok(keys)
+    }
+
+    pub async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+        info!("Fetching all key-value pairs");
+        let keys = self.get_all_keys().await?;
+        let values: Vec<String> = self.connection.clone().mget(&keys).await?;
+        let kv_pairs = keys.into_iter().zip(values.into_iter()).collect();
+        Ok(kv_pairs)
     }
 }
 
@@ -88,7 +100,7 @@ pub enum RedisClientError {
 mod tests {
     use std::sync::mpsc::channel;
 
-    use tokio;
+    use tokio::{self};
 
     use super::*;
 
@@ -129,6 +141,32 @@ mod tests {
         // Multi Get
         let values = client.get_multiple(&keys).await.unwrap();
         assert_eq!(values, vec!["test_value1".to_string(), "test_value2".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_key_values() {
+        let client = setup().await;
+
+        // Set some keys
+        client
+            .set(&"key1".to_string(), &"value1".to_string(), Duration::from_secs(60))
+            .await
+            .unwrap();
+        client
+            .set(&"key2".to_string(), &"value2".to_string(), Duration::from_secs(60))
+            .await
+            .unwrap();
+        client
+            .set(&"key3".to_string(), &"value3".to_string(), Duration::from_secs(60))
+            .await
+            .unwrap();
+
+        // Fetch all key-values
+        let key_values = client.get_all_key_values().await.unwrap();
+
+        assert_eq!(key_values.get("key1").unwrap(), "value1");
+        assert_eq!(key_values.get("key2").unwrap(), "value2");
+        assert_eq!(key_values.get("key3").unwrap(), "value3");
     }
 
     #[tokio::test]

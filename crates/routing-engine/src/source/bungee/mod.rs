@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use types::*;
 
-use crate::{CostType, Route};
 use crate::source::{Calldata, RouteSource};
+use crate::{CostType, Route};
 
 mod types;
 
@@ -73,7 +73,6 @@ pub struct GenerateRouteCalldataError;
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
 
-    // todo
     type GenerateRouteCalldataError = GenerateRouteCalldataError;
 
     async fn fetch_least_route_cost_in_usd(
@@ -163,12 +162,12 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::Config;
     use config::get_sample_config;
+    use config::Config;
 
-    use crate::{BungeeClient, CostType, Route};
     use crate::source::bungee::types::GetQuoteRequest;
     use crate::source::RouteSource;
+    use crate::{BungeeClient, CostType, Route};
 
     fn setup() -> (Config, BungeeClient) {
         let config = get_sample_config();
