@@ -12,6 +12,7 @@ serde = { version = "1.0.203", features = ["derive"] }
 futures = "0.3.30"
 log = "0.4.21"
 derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
+thiserror = "1.0.61"
 
 # workspace dependencies
 storage = { workspace = true }

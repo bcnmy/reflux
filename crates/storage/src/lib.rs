@@ -6,7 +6,7 @@ use std::time::Duration;
 pub use ::redis::{ControlFlow, Msg};
 use mongodb::bson::Document;
 
-pub use redis_client::RedisClient;
+pub use redis_client::{RedisClient, RedisClientError};
 
 pub mod mongodb_client;
 

@@ -4,18 +4,18 @@ use std::time::Duration;
 use axum::http::Method;
 use clap::Parser;
 use log::{debug, error, info};
-use tokio;
 use tokio::signal;
+use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
 use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
-use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use routing_engine::engine::RoutingEngine;
 use routing_engine::estimator::LinearRegressionEstimator;
-use storage::{ControlFlow, MessageQueue, RedisClient};
+use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use storage::mongodb_client::MongoDBClient;
+use storage::{ControlFlow, MessageQueue, RedisClient};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -107,18 +107,24 @@ async fn run_solver(config: Config) {
     // Subscribe to cache update messages
     let cache_update_topic = config.indexer_config.indexer_update_topic.clone();
     let routing_engine_clone = Arc::clone(&routing_engine);
-    tokio::spawn(async move {
+
+    let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
+
+    let cache_update_handle = tokio::spawn(async move {
         let redis_client = redis_client.clone();
-        redis_client
-            .subscribe(&cache_update_topic, move |_msg| {
-                info!("Received cache update notification");
-                let routing_engine_clone = Arc::clone(&routing_engine_clone);
-                tokio::spawn(async move {
-                    routing_engine_clone.refresh_cache().await;
-                });
-                ControlFlow::<()>::Continue
-            })
-            .unwrap();
+        if let Err(e) = redis_client.subscribe(&cache_update_topic, move |_msg| {
+            info!("Received cache update notification");
+            let routing_engine_clone = Arc::clone(&routing_engine_clone);
+            tokio::spawn(async move {
+                routing_engine_clone.refresh_cache().await;
+            });
+            ControlFlow::<()>::Continue
+        }) {
+            error!("Failed to subscribe to cache update topic: {}", e);
+        }
+
+        // Listen for shutdown signal
+        let _ = shutdown_rx.recv().await;
     });
 
     // API service controller
@@ -135,10 +141,14 @@ async fn run_solver(config: Config) {
     let listener = tokio::net::TcpListener::bind(format!("{}:{}", app_host, app_port))
         .await
         .expect("Failed to bind port");
+
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()))
         .await
         .unwrap();
+
+    let _ = shutdown_tx.send(());
+    let _ = cache_update_handle.abort();
 
     info!("Server stopped.");
 }
@@ -177,7 +187,7 @@ async fn run_indexer(config: Config) {
     };
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(shutdown_tx: broadcast::Sender<()>) {
     let ctrl_c = async {
         signal::ctrl_c().await.expect("Unable to handle ctrl+c");
     };
@@ -194,5 +204,7 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+
     info!("signal received, starting graceful shutdown");
+    let _ = shutdown_tx.send(());
 }

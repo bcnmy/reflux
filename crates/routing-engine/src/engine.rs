@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -6,12 +5,13 @@ use derive_more::Display;
 use futures::stream::{self, StreamExt};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::sync::RwLock;
 
 use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
 use config::config::BucketConfig;
-use storage::RedisClient;
+use storage::{RedisClient, RedisClientError};
 
 use crate::estimator::{Estimator, LinearRegressionEstimator};
 
@@ -33,6 +33,21 @@ pub struct Route {
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
 struct PathQuery(u32, u32, String, String);
+
+#[derive(Error, Debug)]
+pub enum RoutingEngineError {
+    #[error("Redis error: {0}")]
+    RedisError(#[from] RedisClientError),
+
+    #[error("Estimator error: {0}")]
+    EstimatorError(#[from] serde_json::Error),
+
+    #[error("Cache error: {0}")]
+    CacheError(String),
+
+    #[error("User balance fetch error: {0}")]
+    UserBalanceFetchError(String),
+}
 
 /// Routing Engine
 /// This struct is responsible for calculating the best cost path for a user
@@ -65,6 +80,7 @@ impl RoutingEngine {
                     cache.insert(key.clone(), value.clone());
                 }
                 info!("Cache refreshed with latest data from Redis.");
+                debug!("Cache: {:?}", cache);
             }
             Err(e) => {
                 error!("Failed to refresh cache from Redis: {}", e);
@@ -80,12 +96,12 @@ impl RoutingEngine {
         to_chain: u32,
         to_token: &str,
         to_value: f64,
-    ) -> Vec<Route> {
+    ) -> Result<Vec<Route>, RoutingEngineError> {
         debug!(
             "Getting best cost path for user: {}, to_chain: {}, to_token: {}, to_value: {}",
             account, to_chain, to_token, to_value
         );
-        let user_balances = self.get_user_balance_from_agg_service(&account).await;
+        let user_balances = self.get_user_balance_from_agg_service(&account).await?;
         debug!("User balances: {:?}", user_balances);
 
         // todo: for account aggregation, transfer same chain same asset first
@@ -108,7 +124,8 @@ impl RoutingEngine {
                             to_token.to_string(),
                         ),
                     )
-                    .await;
+                    .await
+                    .unwrap_or_default();
                 (balance, fee_cost)
             })
             .collect()
@@ -160,7 +177,8 @@ impl RoutingEngine {
                                 to_token.to_string(),
                             ),
                         )
-                        .await;
+                        .await
+                        .unwrap_or_default();
                     (balance, fee_cost)
                 })
                 .collect()
@@ -201,10 +219,14 @@ impl RoutingEngine {
             account, to_chain, to_token, total_cost
         );
 
-        selected_assets
+        Ok(selected_assets)
     }
 
-    async fn get_cached_data(&self, target_amount: f64, path: PathQuery) -> f64 {
+    async fn get_cached_data(
+        &self,
+        target_amount: f64,
+        path: PathQuery,
+    ) -> Result<f64, RoutingEngineError> {
         let mut buckets_array: Vec<BucketConfig> = self
             .buckets
             .clone()
@@ -224,24 +246,31 @@ impl RoutingEngine {
                 target_amount >= window.token_amount_from_usd
                     && target_amount <= window.token_amount_to_usd
             })
-            .unwrap();
+            .ok_or_else(|| {
+                RoutingEngineError::CacheError("No matching bucket found".to_string())
+            })?;
 
         let key = bucket.get_hash().to_string();
 
         let cache = self.cache.read().await;
-        let value = cache.get(&key).unwrap();
-        let estimator: Result<LinearRegressionEstimator, serde_json::Error> =
-            serde_json::from_str(value);
+        let value = cache
+            .get(&key)
+            .ok_or_else(|| RoutingEngineError::CacheError("No cached value found".to_string()))?;
+        let estimator: LinearRegressionEstimator = serde_json::from_str(value)?;
 
-        let cost = estimator.unwrap().borrow().estimate(target_amount);
-
-        cost
+        Ok(estimator.estimate(target_amount))
     }
 
     /// Get user balance from account aggregation service
-    async fn get_user_balance_from_agg_service(&self, account: &str) -> Vec<Balance> {
+    async fn get_user_balance_from_agg_service(
+        &self,
+        account: &str,
+    ) -> Result<Vec<Balance>, RoutingEngineError> {
         // Note: aas should always return vec of balances
-        self.aas_client.get_user_accounts_balance(&account.to_string()).await
+        self.aas_client
+            .get_user_accounts_balance(&account.to_string())
+            .await
+            .map_err(|e| RoutingEngineError::UserBalanceFetchError(e.to_string()))
     }
 }
 
@@ -257,15 +286,15 @@ mod tests {
     use config::BucketConfig;
     use storage::mongodb_client::MongoDBClient;
 
-    use crate::{
-        engine::RoutingEngine,
-        estimator::{DataPoint, LinearRegressionEstimator},
-    };
     use crate::engine::PathQuery;
     use crate::estimator::Estimator;
+    use crate::{
+        engine::{RoutingEngine, RoutingEngineError},
+        estimator::{DataPoint, LinearRegressionEstimator},
+    };
 
     #[tokio::test]
-    async fn test_get_cached_data() {
+    async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
         // Create dummy buckets
         let buckets = vec![
             BucketConfig {
@@ -295,7 +324,7 @@ mod tests {
             DataPoint { x: 2.0, y: 2.0 },
         ])
         .unwrap();
-        let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
+        let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
 
         // Create a cache with a dummy bucket
         let key = buckets[0].get_hash().to_string();
@@ -333,13 +362,14 @@ mod tests {
         let path_query = PathQuery(1, 2, "USDC".to_string(), "ETH".to_string());
 
         // Call get_cached_data and assert the result
-        let result = routing_engine.get_cached_data(target_amount, path_query).await;
+        let result = routing_engine.get_cached_data(target_amount, path_query).await?;
         assert!(result > 0.0);
         assert_eq!(result, dummy_estimator.estimate(target_amount));
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_get_best_cost_path() {
+    async fn test_get_best_cost_path() -> Result<(), RoutingEngineError> {
         let api_key = env::var("COVALENT_API_KEY");
         if api_key.is_err() {
             panic!("COVALENT_API_KEY is not set");
@@ -389,7 +419,7 @@ mod tests {
             DataPoint { x: 2.0, y: 2.0 },
         ])
         .unwrap();
-        let serialized_estimator = serde_json::to_string(&dummy_estimator).unwrap();
+        let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
         // Create a cache with a dummy bucket
         let key1 = buckets[0].get_hash().to_string();
         let key2 = buckets[1].get_hash().to_string();
@@ -408,7 +438,8 @@ mod tests {
 
         // should have USDT in bsc-mainnet > $0.5
         let dummy_user_address = "0x00000ebe3fa7cb71aE471547C836E0cE0AE758c2";
-        let result = routing_engine.get_best_cost_path(dummy_user_address, 2, "USDT", 0.5).await;
+        let result = routing_engine.get_best_cost_path(dummy_user_address, 2, "USDT", 0.5).await?;
         assert_eq!(result.len(), 1);
+        Ok(())
     }
 }
