@@ -162,7 +162,7 @@ impl ServiceController {
             .await
         {
             Ok(routes) => {
-                let response = json!({ "routes": routes });
+                let response = json!({ "routes": "routes" });
                 (StatusCode::OK, Json(response))
             }
             Err(err) => {

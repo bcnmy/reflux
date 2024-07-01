@@ -99,6 +99,8 @@ async fn run_solver(config: Config) {
 
     // Initialize routing engine
     let buckets = config.buckets.clone();
+    let chain_configs = config.chains.clone();
+    let token_configs = config.tokens.clone();
     let redis_client = RedisClient::build(&config.infra.redis_url)
         .await
         .expect("Failed to instantiate redis client");
@@ -107,6 +109,8 @@ async fn run_solver(config: Config) {
         buckets,
         redis_client.clone(),
         config.solver_config,
+        chain_configs,
+        token_configs,
     ));
 
     // Subscribe to cache update messages
