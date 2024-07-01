@@ -96,9 +96,15 @@ impl<
                     // Get the fee in usd from source
                     let route = Route::build(bucket, self.config)
                         .map_err(|err| IndexerErrors::RouteBuildError(err))?;
-                    let fee_in_usd = self
+                    let (_, fee_in_usd) = self
                         .source
-                        .fetch_least_route_cost_in_usd(&route, from_token_amount_in_wei, cost_type)
+                        .fetch_least_route_and_cost_in_usd(
+                            &route,
+                            &from_token_amount_in_wei,
+                            None,
+                            None,
+                            cost_type,
+                        )
                         .await
                         .map_err(|err| IndexerErrors::RouteSourceError(err))?;
 
