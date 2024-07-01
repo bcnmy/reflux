@@ -2,62 +2,62 @@ use account_aggregation::{service::AccountAggregationService, types};
 use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use routing_engine::engine::RoutingEngine;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 pub struct ServiceController {
     account_service: Arc<AccountAggregationService>,
     routing_engine: Arc<RoutingEngine>,
+    token_supported: HashMap<String, HashMap<u32, bool>>,
 }
 
 impl ServiceController {
     pub fn new(
         account_service: AccountAggregationService,
         routing_engine: Arc<RoutingEngine>,
+        token_supported: HashMap<String, HashMap<u32, bool>>,
     ) -> Self {
-        Self { account_service: Arc::new(account_service), routing_engine }
+        Self { account_service: Arc::new(account_service), routing_engine, token_supported }
     }
 
-    pub fn router(self) -> Router {
-        let account_service = self.account_service.clone();
-        let routing_engine = self.routing_engine.clone();
-
+    pub fn router(&self) -> Router {
         Router::new()
             .route("/", get(ServiceController::status))
             .route("/api/health", get(ServiceController::status))
             .route(
                 "/api/account",
                 get({
-                    let account_service = account_service.clone();
+                    let account_service = self.account_service.clone();
                     move |Query(query): Query<types::UserAccountMappingQuery>| async move {
-                        ServiceController::get_account(account_service.clone(), query).await
+                        ServiceController::get_account(account_service, query).await
                     }
                 }),
             )
             .route(
                 "/api/register_account",
                 axum::routing::post({
-                    let account_service = account_service.clone();
+                    let account_service = self.account_service.clone();
                     move |Json(payload): Json<types::RegisterAccountPayload>| async move {
-                        ServiceController::register_user_account(account_service.clone(), payload)
-                            .await
+                        ServiceController::register_user_account(account_service, payload).await
                     }
                 }),
             )
             .route(
                 "/api/add_account",
                 axum::routing::post({
-                    let account_service = account_service.clone();
+                    let account_service = self.account_service.clone();
                     move |Json(payload): Json<types::AddAccountPayload>| async move {
-                        ServiceController::add_account(account_service.clone(), payload).await
+                        ServiceController::add_account(account_service, payload).await
                     }
                 }),
             )
             .route(
                 "/api/get_best_path",
                 get({
-                    let routing_engine = routing_engine.clone();
+                    let routing_engine = self.routing_engine.clone();
+                    let token_supported = self.token_supported.clone();
                     move |Query(query): Query<types::PathQuery>| async move {
-                        ServiceController::get_best_path(routing_engine.clone(), query).await
+                        ServiceController::get_best_path(routing_engine, token_supported, query)
+                            .await
                     }
                 }),
             )
@@ -134,8 +134,29 @@ impl ServiceController {
     /// Get best cost path for asset consolidation
     pub async fn get_best_path(
         routing_engine: Arc<RoutingEngine>,
+        token_supported: HashMap<String, HashMap<u32, bool>>,
         query: types::PathQuery,
     ) -> impl IntoResponse {
+        // Check for the supported chain and token
+        match token_supported.get(&query.to_token) {
+            Some(chain_supported) => match chain_supported.get(&query.to_chain) {
+                Some(supported) => {
+                    if !supported {
+                        let response = json!({ "error": "Token not supported on chain" });
+                        return (StatusCode::BAD_REQUEST, Json(response));
+                    }
+                }
+                None => {
+                    let response = json!({ "error": "Chain not supported for token" });
+                    return (StatusCode::BAD_REQUEST, Json(response));
+                }
+            },
+            None => {
+                let response = json!({ "error": "Token not supported" });
+                return (StatusCode::BAD_REQUEST, Json(response));
+            }
+        }
+
         match routing_engine
             .get_best_cost_path(&query.account, query.to_chain, &query.to_token, query.to_value)
             .await

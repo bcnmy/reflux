@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -131,8 +132,22 @@ async fn run_solver(config: Config) {
         let _ = shutdown_rx.recv().await;
     });
 
+    let token_chain_supported: HashMap<String, HashMap<u32, bool>> = config
+        .tokens
+        .iter()
+        .map(|(token, token_config)| {
+            let chain_supported = token_config
+                .by_chain
+                .iter()
+                .map(|(chain_id, chain_config)| (*chain_id, chain_config.is_enabled))
+                .collect();
+            (token.clone(), chain_supported)
+        })
+        .collect();
+
     // API service controller
-    let service_controller = ServiceController::new(account_service, routing_engine);
+    let service_controller =
+        ServiceController::new(account_service, routing_engine, token_chain_supported);
 
     let cors = CorsLayer::new().allow_origin(Any).allow_methods([
         Method::GET,
@@ -146,8 +161,9 @@ async fn run_solver(config: Config) {
         .await
         .expect("Failed to bind port");
 
+    // todo: fix the graceful shutdown
     axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()))
+        // .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()))
         .await
         .unwrap();
 

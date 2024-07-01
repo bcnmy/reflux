@@ -17,17 +17,19 @@ use crate::estimator::{Estimator, LinearRegressionEstimator};
 
 #[derive(Serialize, Deserialize, Debug, Display, PartialEq, Clone)]
 #[display(
-    "Route: from_chain: {}, to_chain: {}, token: {}, amount: {}",
+    "Route: from_chain: {}, to_chain: {}, from_token: {}, to_token: {}, amount in usd: {}",
     from_chain,
     to_chain,
-    token,
-    amount
+    from_token,
+    to_token,
+    amount_in_usd
 )]
 pub struct Route {
     pub from_chain: u32,
     pub to_chain: u32,
-    pub token: String,
-    pub amount: f64,
+    pub from_token: String,
+    pub to_token: String,
+    pub amount_in_usd: f64,
 }
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -158,8 +160,9 @@ impl RoutingEngine {
             selected_assets.push(Route {
                 from_chain: balance.chain_id,
                 to_chain,
-                token: balance.token.clone(),
-                amount: amount_to_take,
+                from_token: balance.token.clone(),
+                to_token: to_token.to_string(),
+                amount_in_usd: amount_to_take,
             });
         }
 
@@ -209,8 +212,9 @@ impl RoutingEngine {
                 selected_assets.push(Route {
                     from_chain: balance.chain_id,
                     to_chain,
-                    token: balance.token.clone(),
-                    amount: amount_to_take,
+                    from_token: balance.token.clone(),
+                    to_token: to_token.to_string(),
+                    amount_in_usd: amount_to_take,
                 });
             }
         }
