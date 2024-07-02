@@ -1,6 +1,7 @@
 ## reflux
 
-Backend of solver which helps in seamless cross-chain asset consolidation. It aggregates user balances, automates routing, and suggests optimal transactions.
+Backend of solver which helps in seamless cross-chain asset consolidation. It aggregates user balances, automates
+routing, and suggests optimal transactions.
 
 #### Installation
 
@@ -18,4 +19,4 @@ Once build is copleted, just run the server and test with the endpoints
 
 ### Dependencies graph
 
-![image](./graph.png)
+![image](./assets/dependency-graph.png)

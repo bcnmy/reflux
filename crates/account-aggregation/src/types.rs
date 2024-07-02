@@ -20,7 +20,7 @@ pub struct TokenData {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Balance {
+pub struct TokenWithBalance {
     pub token: String,
     pub token_address: String,
     pub chain_id: u32,
