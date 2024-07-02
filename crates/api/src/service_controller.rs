@@ -1,8 +1,11 @@
-use account_aggregation::{service::AccountAggregationService, types};
-use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
-use routing_engine::engine::RoutingEngine;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use axum::{extract::Query, http::StatusCode, Json, response::IntoResponse, Router, routing::get};
 use serde_json::json;
-use std::{collections::HashMap, sync::Arc};
+
+use account_aggregation::{service::AccountAggregationService, types};
+use routing_engine::engine::RoutingEngine;
 
 pub struct ServiceController {
     account_service: Arc<AccountAggregationService>,

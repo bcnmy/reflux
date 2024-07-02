@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::future;
@@ -33,6 +34,12 @@ pub trait KeyValueStore: Debug {
         &self,
         kv: &Vec<(String, String)>,
     ) -> impl future::Future<Output = Result<(), Self::Error>>;
+
+    fn get_all_keys(&self) -> impl future::Future<Output = Result<Vec<String>, RedisClientError>>;
+
+    fn get_all_key_values(
+        &self,
+    ) -> impl future::Future<Output = Result<HashMap<String, String>, RedisClientError>>;
 }
 
 pub trait MessageQueue: Debug {

@@ -304,6 +304,7 @@ pub enum BuildEstimatorError<'config, 'est_de, Estimator: estimator::Estimator<'
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::env;
     use std::fmt::Error;
     use std::time::Duration;
@@ -312,7 +313,7 @@ mod tests {
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
-    use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
+    use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg, RedisClientError};
 
     use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
@@ -336,11 +337,19 @@ mod tests {
         }
 
         async fn set(&self, _: &String, _: &String, _: Duration) -> Result<(), Self::Error> {
-            Ok(())
+            todo!()
         }
 
         async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
-            Ok(())
+            todo!()
+        }
+
+        async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+            todo!()
+        }
+
+        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+            todo!()
         }
     }
 

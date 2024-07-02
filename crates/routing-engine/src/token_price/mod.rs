@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 pub use coingecko::CoingeckoClient;
 
@@ -14,4 +14,3 @@ pub trait TokenPriceProvider: Debug {
         token_symbol: &String,
     ) -> impl futures::Future<Output = Result<f64, Self::Error>>;
 }
-

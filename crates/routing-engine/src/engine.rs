@@ -8,8 +8,8 @@ use tokio::sync::RwLock;
 
 use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
-use config::{config::BucketConfig, ChainConfig, SolverConfig, TokenConfig};
-use storage::{RedisClient, RedisClientError};
+use config::{ChainConfig, config::BucketConfig, SolverConfig, TokenConfig};
+use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
     estimator::{Estimator, LinearRegressionEstimator},
@@ -348,12 +348,12 @@ mod tests {
     use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
-    use crate::engine::PathQuery;
-    use crate::estimator::Estimator;
     use crate::{
         engine::{RoutingEngine, RoutingEngineError},
         estimator::{DataPoint, LinearRegressionEstimator},
     };
+    use crate::engine::PathQuery;
+    use crate::estimator::Estimator;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
