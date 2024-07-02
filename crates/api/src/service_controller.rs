@@ -5,7 +5,7 @@ use axum::{extract::Query, http::StatusCode, Json, response::IntoResponse, Route
 use serde_json::json;
 
 use account_aggregation::{service::AccountAggregationService, types};
-use routing_engine::engine::RoutingEngine;
+use routing_engine::routing_engine::RoutingEngine;
 
 pub struct ServiceController {
     account_service: Arc<AccountAggregationService>,
@@ -161,7 +161,7 @@ impl ServiceController {
         }
 
         match routing_engine
-            .get_best_cost_path(&query.account, query.to_chain, &query.to_token, query.to_value)
+            .get_best_cost_paths(&query.account, query.to_chain, &query.to_token, query.to_value)
             .await
         {
             Ok(routes) => {

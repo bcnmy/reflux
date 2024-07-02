@@ -13,8 +13,8 @@ use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
 use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
-use routing_engine::engine::RoutingEngine;
 use routing_engine::estimator::LinearRegressionEstimator;
+use routing_engine::routing_engine::RoutingEngine;
 use storage::{ControlFlow, MessageQueue, RedisClient};
 use storage::mongodb_client::MongoDBClient;
 

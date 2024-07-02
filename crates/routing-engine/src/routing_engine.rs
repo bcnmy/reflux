@@ -12,8 +12,8 @@ use config::{ChainConfig, config::BucketConfig, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
-    estimator::{Estimator, LinearRegressionEstimator},
-    Route,
+    BridgeResult,
+    estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -90,13 +90,13 @@ impl RoutingEngine {
 
     /// Get the best cost path for a user
     /// This function will get the user balances from the aas and then calculate the best cost path for the user
-    pub async fn get_best_cost_path(
+    pub async fn get_best_cost_paths(
         &self,
         account: &str,
         to_chain: u32,
         to_token: &str,
         to_value: f64,
-    ) -> Result<Vec<Route>, RoutingEngineError> {
+    ) -> Result<Vec<BridgeResult>, RoutingEngineError> {
         debug!(
             "Getting best cost path for user: {}, to_chain: {}, to_token: {}, to_value: {}",
             account, to_chain, to_token, to_value
@@ -137,7 +137,7 @@ impl RoutingEngine {
         to_chain: u32,
         to_token: &str,
         to_value_usd: f64,
-    ) -> Result<(Vec<Route>, f64, f64), RoutingEngineError> {
+    ) -> Result<(Vec<BridgeResult>, f64, f64), RoutingEngineError> {
         // Sort direct assets by Balance^x / Fee_Cost^y, here x=2 and y=1
         let x = self.estimates.x_value;
         let y = self.estimates.y_value;
@@ -178,7 +178,7 @@ impl RoutingEngine {
 
         let mut total_cost = 0.0;
         let mut total_amount_needed = to_value_usd;
-        let mut selected_routes: Vec<Route> = Vec::new();
+        let mut selected_routes: Vec<BridgeResult> = Vec::new();
 
         for (balance, fee) in assets_sorted_by_bridging_cost {
             if total_amount_needed <= 0.0 {
@@ -271,7 +271,7 @@ impl RoutingEngine {
         to_token_id: &str,
         token_amount_in_usd: f64,
         is_smart_contract_deposit: bool,
-    ) -> Result<Route, RoutingEngineError> {
+    ) -> Result<BridgeResult, RoutingEngineError> {
         let from_chain = self.chain_configs.get(&from_chain_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!(
                 "Chain config not found for ID {}",
@@ -288,13 +288,11 @@ impl RoutingEngine {
             RoutingEngineError::CacheError(format!("Token config not found for {}", to_token_id))
         })?;
 
-        Ok(Route {
-            from_chain,
-            to_chain,
-            from_token,
-            to_token,
-            amount_in_usd: token_amount_in_usd,
-            is_smart_contract_deposit,
+        Ok(BridgeResult {
+            route: Route { from_chain, to_chain, from_token, to_token, is_smart_contract_deposit },
+            source_amount_in_usd: token_amount_in_usd,
+            from_address: "".to_string(), //  TODO
+            to_address: "".to_string(),   //  TODO
         })
     }
 }
@@ -312,11 +310,11 @@ mod tests {
     use storage::mongodb_client::MongoDBClient;
 
     use crate::{
-        engine::{RoutingEngine, RoutingEngineError},
         estimator::{DataPoint, LinearRegressionEstimator},
+        routing_engine::{RoutingEngine, RoutingEngineError},
     };
-    use crate::engine::PathQuery;
     use crate::estimator::Estimator;
+    use crate::routing_engine::PathQuery;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
@@ -498,7 +496,7 @@ mod tests {
 
         // should have USDT in bsc-mainnet > $0.5
         let dummy_user_address = "0x00000ebe3fa7cb71aE471547C836E0cE0AE758c2";
-        let result = routing_engine.get_best_cost_path(dummy_user_address, 2, "USDT", 0.5).await?;
+        let result = routing_engine.get_best_cost_paths(dummy_user_address, 2, "USDT", 0.5).await?;
         assert_eq!(result.len(), 1);
         Ok(())
     }

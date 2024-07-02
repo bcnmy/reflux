@@ -7,11 +7,12 @@ pub use indexer::Indexer;
 pub use source::bungee::BungeeClient;
 pub use token_price::CoingeckoClient;
 
-pub mod engine;
+pub mod routing_engine;
 pub mod token_price;
 
 pub mod estimator;
 pub mod indexer;
+mod settlement_engine;
 mod source;
 
 #[derive(Debug, Error, Display)]
@@ -21,12 +22,11 @@ pub enum CostType {
 }
 
 #[derive(Debug)]
-pub struct Route<'a> {
-    from_chain: &'a ChainConfig,
-    to_chain: &'a ChainConfig,
-    from_token: &'a TokenConfig,
-    to_token: &'a TokenConfig,
-    amount_in_usd: f64,
+pub struct Route<'config> {
+    from_chain: &'config ChainConfig,
+    to_chain: &'config ChainConfig,
+    from_token: &'config TokenConfig,
+    to_token: &'config TokenConfig,
     is_smart_contract_deposit: bool,
 }
 
@@ -57,7 +57,6 @@ impl<'a> Route<'a> {
             to_chain: to_chain.unwrap(),
             from_token: from_token.unwrap(),
             to_token: to_token.unwrap(),
-            amount_in_usd: bucket.token_amount_from_usd,
             is_smart_contract_deposit: bucket.is_smart_contract_deposit_supported,
         })
     }
@@ -70,4 +69,12 @@ pub enum RouteError {
 
     #[error("Token not found while building route: {}", _0)]
     TokenNotFoundError(String),
+}
+
+#[derive(Debug)]
+pub struct BridgeResult<'config> {
+    route: Route<'config>,
+    source_amount_in_usd: f64,
+    from_address: String,
+    to_address: String,
 }

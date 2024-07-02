@@ -341,7 +341,6 @@ mod tests {
             to_chain: &config.chains.get(&42161).unwrap(),
             from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
             to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            amount_in_usd: 100000000.0,
             is_smart_contract_deposit: false,
         };
         let (_, least_route_cost) = client
@@ -367,7 +366,6 @@ mod tests {
             to_chain: &config.chains.get(&42161).unwrap(),
             from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
             to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            amount_in_usd: 0.0,
             is_smart_contract_deposit: false,
         };
 
