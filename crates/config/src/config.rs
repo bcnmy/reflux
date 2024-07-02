@@ -298,7 +298,7 @@ impl PartialEq<Self> for BucketConfig {
 
 impl Eq for BucketConfig {}
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainConfig {
     // The chain id
     #[validate(minimum = 1)]
@@ -313,7 +313,7 @@ pub struct ChainConfig {
     pub covalent_name: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct TokenConfig {
     // The token symbol
     #[validate(min_length = 1)]
@@ -328,8 +328,8 @@ pub struct TokenConfig {
     pub by_chain: TokenConfigByChainConfigs,
 }
 
-#[derive(Debug, Deserialize, Validate, Into, From)]
-pub struct TokenConfigByChainConfigs(HashMap<u32, ChainSpecificTokenConfig>);
+#[derive(Debug, Deserialize, Validate, Into, From, Clone)]
+pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
 
 impl ValidateUniqueItems for TokenConfigByChainConfigs {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
@@ -345,7 +345,7 @@ impl Deref for TokenConfigByChainConfigs {
     }
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainSpecificTokenConfig {
     // The number of decimals the token has
     #[validate(minimum = 1)]

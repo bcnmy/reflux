@@ -1,4 +1,5 @@
 use derive_more::Display;
+use serde::{ser::SerializeStruct, Serialize};
 use thiserror::Error;
 
 use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
@@ -25,6 +26,7 @@ pub struct Route<'a> {
     to_chain: &'a ChainConfig,
     from_token: &'a TokenConfig,
     to_token: &'a TokenConfig,
+    amount_in_usd: f64,
     is_smart_contract_deposit: bool,
 }
 
@@ -55,6 +57,7 @@ impl<'a> Route<'a> {
             to_chain: to_chain.unwrap(),
             from_token: from_token.unwrap(),
             to_token: to_token.unwrap(),
+            amount_in_usd: bucket.token_amount_from_usd,
             is_smart_contract_deposit: bucket.is_smart_contract_deposit_supported,
         })
     }

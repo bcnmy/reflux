@@ -1,34 +1,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use derive_more::Display;
 use futures::stream::{self, StreamExt};
 use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
 use account_aggregation::service::AccountAggregationService;
 use account_aggregation::types::Balance;
-use config::{config::BucketConfig, SolverConfig};
+use config::{config::BucketConfig, ChainConfig, SolverConfig, TokenConfig};
 use storage::{RedisClient, RedisClientError};
 
-use crate::estimator::{Estimator, LinearRegressionEstimator};
-
-#[derive(Serialize, Deserialize, Debug, Display, PartialEq, Clone)]
-#[display(
-    "Route: from_chain: {}, to_chain: {}, token: {}, amount: {}",
-    from_chain,
-    to_chain,
-    token,
-    amount
-)]
-pub struct Route {
-    pub from_chain: u32,
-    pub to_chain: u32,
-    pub token: String,
-    pub amount: f64,
-}
+use crate::{
+    estimator::{Estimator, LinearRegressionEstimator},
+    Route,
+};
 
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
@@ -58,6 +44,8 @@ pub struct RoutingEngine {
     cache: Arc<RwLock<HashMap<String, String>>>, // (hash(bucket), hash(estimator_value)
     redis_client: RedisClient,
     estimates: SolverConfig,
+    chain_configs: HashMap<u32, ChainConfig>,
+    token_configs: HashMap<String, TokenConfig>,
 }
 
 impl RoutingEngine {
@@ -66,10 +54,20 @@ impl RoutingEngine {
         buckets: Vec<BucketConfig>,
         redis_client: RedisClient,
         solver_config: SolverConfig,
+        chain_configs: HashMap<u32, ChainConfig>,
+        token_configs: HashMap<String, TokenConfig>,
     ) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
 
-        Self { aas_client, cache, buckets, redis_client, estimates: solver_config }
+        Self {
+            aas_client,
+            cache,
+            buckets,
+            redis_client,
+            estimates: solver_config,
+            chain_configs,
+            token_configs,
+        }
     }
 
     pub async fn refresh_cache(&self) {
@@ -104,7 +102,7 @@ impl RoutingEngine {
             account, to_chain, to_token, to_value
         );
         let user_balances = self.get_user_balance_from_agg_service(&account).await?;
-        debug!("User balances: {:?}", user_balances);
+        // debug!("User balances: {:?}", user_balances);
 
         // todo: for account aggregation, transfer same chain same asset first
         let direct_assets: Vec<_> =
@@ -155,11 +153,35 @@ impl RoutingEngine {
             total_amount_needed -= amount_to_take;
             total_cost += fee;
 
+            let from_chain = self.chain_configs.get(&balance.chain_id).ok_or_else(|| {
+                RoutingEngineError::CacheError(format!(
+                    "Chain config not found for ID {}",
+                    balance.chain_id
+                ))
+            })?;
+            let to_chain = self.chain_configs.get(&to_chain).ok_or_else(|| {
+                RoutingEngineError::CacheError(format!(
+                    "Chain config not found for ID {}",
+                    to_chain
+                ))
+            })?;
+            let from_token = self.token_configs.get(&balance.token).ok_or_else(|| {
+                RoutingEngineError::CacheError(format!(
+                    "Token config not found for {}",
+                    balance.token
+                ))
+            })?;
+            let to_token = self.token_configs.get(to_token).ok_or_else(|| {
+                RoutingEngineError::CacheError(format!("Token config not found for {}", to_token))
+            })?;
+
             selected_assets.push(Route {
-                from_chain: balance.chain_id,
+                from_chain,
                 to_chain,
-                token: balance.token.clone(),
-                amount: amount_to_take,
+                from_token,
+                to_token,
+                amount_in_usd: amount_to_take,
+                is_smart_contract_deposit: false,
             });
         }
 
@@ -206,11 +228,38 @@ impl RoutingEngine {
                 total_amount_needed -= amount_to_take;
                 total_cost += fee_cost;
 
+                let from_chain = self.chain_configs.get(&balance.chain_id).ok_or_else(|| {
+                    RoutingEngineError::CacheError(format!(
+                        "Chain config not found for ID {}",
+                        balance.chain_id
+                    ))
+                })?;
+                let to_chain = self.chain_configs.get(&to_chain).ok_or_else(|| {
+                    RoutingEngineError::CacheError(format!(
+                        "Chain config not found for ID {}",
+                        to_chain
+                    ))
+                })?;
+                let from_token = self.token_configs.get(&balance.token).ok_or_else(|| {
+                    RoutingEngineError::CacheError(format!(
+                        "Token config not found for {}",
+                        balance.token
+                    ))
+                })?;
+                let to_token = self.token_configs.get(to_token).ok_or_else(|| {
+                    RoutingEngineError::CacheError(format!(
+                        "Token config not found for {}",
+                        to_token
+                    ))
+                })?;
+
                 selected_assets.push(Route {
-                    from_chain: balance.chain_id,
+                    from_chain,
                     to_chain,
-                    token: balance.token.clone(),
-                    amount: amount_to_take,
+                    from_token,
+                    to_token,
+                    amount_in_usd: amount_to_take,
+                    is_smart_contract_deposit: false,
                 });
             }
         }
@@ -268,11 +317,22 @@ impl RoutingEngine {
         &self,
         account: &str,
     ) -> Result<Vec<Balance>, RoutingEngineError> {
-        // Note: aas should always return vec of balances
-        self.aas_client
+        let balance = self
+            .aas_client
             .get_user_accounts_balance(&account.to_string())
             .await
-            .map_err(|e| RoutingEngineError::UserBalanceFetchError(e.to_string()))
+            .map_err(|e| RoutingEngineError::UserBalanceFetchError(e.to_string()))?;
+
+        let balance = balance
+            .into_iter()
+            .filter(|balance| {
+                self.chain_configs.contains_key(&balance.chain_id)
+                    && self.token_configs.contains_key(&balance.token)
+            })
+            .collect();
+
+        debug!("User balance: {:?}", balance);
+        Ok(balance)
     }
 }
 
@@ -285,7 +345,7 @@ mod tests {
     use tokio::sync::RwLock;
 
     use account_aggregation::service::AccountAggregationService;
-    use config::{BucketConfig, SolverConfig};
+    use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
     use crate::engine::PathQuery;
@@ -352,16 +412,17 @@ mod tests {
         );
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
-        let estimates = SolverConfig {
-            x_value: 2.0,
-            y_value: 1.0,
-        };
+        let estimates = SolverConfig { x_value: 2.0, y_value: 1.0 };
+        let chain_configs = HashMap::new();
+        let token_configs = HashMap::new();
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
             cache: Arc::new(RwLock::new(cache)),
             redis_client,
             estimates,
+            chain_configs,
+            token_configs,
         };
 
         // Define the target amount and path query
@@ -436,16 +497,40 @@ mod tests {
 
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
-            let estimates = SolverConfig {
-                x_value: 2.0,
-                y_value: 1.0,
-            };
+        let estimates = SolverConfig { x_value: 2.0, y_value: 1.0 };
+        let chain_config1 = ChainConfig {
+            id: 56,
+            name: "bsc-mainnet".to_string(),
+            is_enabled: true,
+            covalent_name: "bsc-mainnet".to_string(),
+        };
+        let chain_config2 = ChainConfig {
+            id: 2,
+            name: "eth-mainnet".to_string(),
+            is_enabled: true,
+            covalent_name: "ethereum".to_string(),
+        };
+        let mut chain_configs = HashMap::new();
+        chain_configs.insert(56, chain_config1);
+        chain_configs.insert(2, chain_config2);
+
+        let token_config = TokenConfig {
+            symbol: "USDT".to_string(),
+            coingecko_symbol: "USDT".to_string(),
+            is_enabled: true,
+            by_chain: TokenConfigByChainConfigs(HashMap::new()),
+        };
+        let mut token_configs = HashMap::new();
+        token_configs.insert("USDT".to_string(), token_config);
+
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
             cache: Arc::new(RwLock::new(cache)),
             redis_client,
             estimates,
+            chain_configs,
+            token_configs,
         };
 
         // should have USDT in bsc-mainnet > $0.5
