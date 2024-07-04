@@ -181,7 +181,6 @@ impl ServiceController {
         account_service: Arc<AccountAggregationService>,
         query: types::UserAccountMappingQuery,
     ) -> impl IntoResponse {
-        println!("get_balance {:?}", query.account);
         match account_service.get_user_accounts_balance(&query.account).await {
             Ok(balances) => {
                 // for loop to add the balance in USD
