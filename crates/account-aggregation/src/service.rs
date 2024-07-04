@@ -1,18 +1,18 @@
 use futures::future::join_all;
 use log::debug;
 use std::sync::Arc;
-use thiserror::Error;
 
 use derive_more::Display;
 use mongodb::bson;
 use reqwest::Client as ReqwestClient;
+use thiserror::Error;
 use uuid::Uuid;
 
-use storage::mongodb_client::{DBError, MongoDBClient};
 use storage::DBProvider;
+use storage::mongodb_client::{DBError, MongoDBClient};
 
 use crate::types::{
-    Account, AddAccountPayload, CovalentApiResponse, ExtractedBalance, RegisterAccountPayload,
+    Account, AddAccountPayload, CovalentApiResponse, TokenWithBalance, RegisterAccountPayload,
     User, UserAccountMapping, UserAccountMappingQuery, UserQuery,
 };
 
@@ -246,7 +246,7 @@ impl AccountAggregationService {
     pub async fn get_user_accounts_balance(
         &self,
         account: &String,
-    ) -> Result<Vec<ExtractedBalance>, AccountAggregationError> {
+    ) -> Result<Vec<TokenWithBalance>, AccountAggregationError> {
         let mut accounts: Vec<String> = Vec::new();
         let user_id = self.get_user_id(account).await.unwrap_or(None);
         if let Some(user_id) = user_id {
@@ -268,7 +268,6 @@ impl AccountAggregationService {
                         "{}/v1/{}/address/{}/balances_v2/?key={}",
                         self.covalent_base_url, network, user, self.covalent_api_key
                     );
-                    debug!("Fetching balance from: {}", url);
                     let client = self.client.clone();
                     async move {
                         let response = client.get(&url).send().await;
@@ -306,7 +305,7 @@ impl AccountAggregationService {
 /// Extract balance data from the API response
 fn extract_balance_data(
     api_response: CovalentApiResponse,
-) -> Result<Vec<ExtractedBalance>, AccountAggregationError> {
+) -> Result<Vec<TokenWithBalance>, AccountAggregationError> {
     let chain_id = api_response.data.chain_id.to_string();
     let results = api_response
         .data
@@ -328,7 +327,7 @@ fn extract_balance_data(
             } else {
                 let balance = balance_raw / 10f64.powf(item.contract_decimals.unwrap() as f64);
 
-                Some(ExtractedBalance {
+                Some(TokenWithBalance {
                     token: token.clone(),
                     token_address: item.contract_ticker_symbol.clone().unwrap(),
                     chain_id: chain_id.clone().parse::<u32>().unwrap(),

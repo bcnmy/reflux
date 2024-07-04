@@ -14,4 +14,3 @@ pub trait TokenPriceProvider: Debug {
         token_symbol: &String,
     ) -> impl futures::Future<Output = Result<f64, Self::Error>>;
 }
-

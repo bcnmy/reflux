@@ -10,11 +10,11 @@ use tower_http::cors::{Any, CorsLayer};
 use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
-use routing_engine::engine::RoutingEngine;
-use routing_engine::estimator::LinearRegressionEstimator;
 use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
-use storage::mongodb_client::MongoDBClient;
+use routing_engine::estimator::LinearRegressionEstimator;
+use routing_engine::routing_engine::RoutingEngine;
 use storage::{ControlFlow, MessageQueue, RedisClient};
+use storage::mongodb_client::MongoDBClient;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -184,9 +184,9 @@ async fn run_indexer(config: Config) {
         .expect("Failed to Instantiate Bungee Client");
 
     let token_price_provider = CoingeckoClient::new(
-        &config.coingecko.base_url,
-        &config.coingecko.api_key,
-        &redis_provider,
+        config.coingecko.base_url.clone(),
+        config.coingecko.api_key.clone(),
+        redis_provider.clone(),
         Duration::from_secs(config.coingecko.expiry_sec),
     );
 

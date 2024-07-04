@@ -1,10 +1,12 @@
-use crate::{KeyValueStore, MessageQueue};
-use log::info;
-use redis::RedisError;
-use redis::{self, aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
 use std::collections::HashMap;
 use std::time::Duration;
+
+use log::info;
+use redis::{self, aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
+use redis::RedisError;
 use thiserror::Error;
+
+use crate::{KeyValueStore, MessageQueue};
 
 #[derive(Debug, Clone)]
 pub struct RedisClient {
@@ -17,20 +19,6 @@ impl RedisClient {
         let client = redis::Client::open(redis_url.clone())?;
         let connection = client.get_multiplexed_async_connection().await?;
         Ok(RedisClient { client, connection })
-    }
-
-    pub async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
-        info!("Fetching all keys");
-        let keys: Vec<String> = self.connection.clone().keys("*").await?;
-        Ok(keys)
-    }
-
-    pub async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
-        info!("Fetching all key-value pairs");
-        let keys = self.get_all_keys().await?;
-        let values: Vec<String> = self.connection.clone().mget(&keys).await?;
-        let kv_pairs = keys.into_iter().zip(values.into_iter()).collect();
-        Ok(kv_pairs)
     }
 }
 
@@ -60,6 +48,20 @@ impl KeyValueStore for RedisClient {
     async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error> {
         info!("Setting keys: {:?}", kv);
         self.connection.clone().mset(kv).await.map_err(RedisClientError::RedisLibraryError)
+    }
+
+    async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+        info!("Fetching all keys");
+        let keys: Vec<String> = self.connection.clone().keys("*").await?;
+        Ok(keys)
+    }
+
+    async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+        info!("Fetching all key-value pairs");
+        let keys = self.get_all_keys().await?;
+        let values: Vec<String> = self.connection.clone().mget(&keys).await?;
+        let kv_pairs = keys.into_iter().zip(values.into_iter()).collect();
+        Ok(kv_pairs)
     }
 }
 

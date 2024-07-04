@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use storage::mongodb_client::MongoDBClient;
 
-use crate::types::{Account, AddAccountPayload, ExtractedBalance, RegisterAccountPayload};
+use crate::types::{Account, AddAccountPayload, RegisterAccountPayload, TokenWithBalance};
 
 #[async_trait]
 pub trait AccountAggregationServiceTrait {
@@ -21,5 +21,5 @@ pub trait AccountAggregationServiceTrait {
         account_payload: RegisterAccountPayload,
     ) -> Result<(), Box<dyn Error>>;
     fn add_account(&self, account_payload: AddAccountPayload) -> Result<(), Box<dyn Error>>;
-    fn get_user_accounts_balance(&self, account: &String) -> Vec<ExtractedBalance>;
+    fn get_user_accounts_balance(&self, account: &String) -> Vec<TokenWithBalance>;
 }

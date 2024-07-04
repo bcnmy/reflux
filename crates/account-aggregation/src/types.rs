@@ -20,7 +20,7 @@ pub struct CovalentTokenData {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct ExtractedBalance {
+pub struct TokenWithBalance {
     pub token: String,
     pub token_address: String,
     pub chain_id: u32,
