@@ -5,8 +5,6 @@ use std::time::Duration;
 use axum::http::Method;
 use clap::Parser;
 use log::{debug, error, info};
-use tokio::signal;
-use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
 use account_aggregation::service::AccountAggregationService;
@@ -117,9 +115,7 @@ async fn run_solver(config: Config) {
     let cache_update_topic = config.indexer_config.indexer_update_topic.clone();
     let routing_engine_clone = Arc::clone(&routing_engine);
 
-    let (shutdown_tx, mut shutdown_rx) = broadcast::channel(1);
-
-    let cache_update_handle = tokio::spawn(async move {
+    tokio::task::spawn_blocking(move || {
         let redis_client = redis_client.clone();
         if let Err(e) = redis_client.subscribe(&cache_update_topic, move |_msg| {
             info!("Received cache update notification");
@@ -131,12 +127,9 @@ async fn run_solver(config: Config) {
         }) {
             error!("Failed to subscribe to cache update topic: {}", e);
         }
-
-        // Listen for shutdown signal
-        let _ = shutdown_rx.recv().await;
     });
 
-    let token_chain_supported: HashMap<String, HashMap<u32, bool>> = config
+    let token_chain_map: HashMap<String, HashMap<u32, bool>> = config
         .tokens
         .iter()
         .map(|(token, token_config)| {
@@ -150,14 +143,22 @@ async fn run_solver(config: Config) {
         .collect();
 
     // API service controller
-    let service_controller =
-        ServiceController::new(account_service, routing_engine, token_chain_supported);
+    let chain_supported: Vec<(u32, String)> =
+        config.chains.iter().map(|(id, chain)| (*id, chain.name.clone())).collect();
+    let token_supported: Vec<String> =
+        config.tokens.iter().map(|(_, token_config)| token_config.symbol.clone()).collect();
+    let service_controller = ServiceController::new(
+        account_service,
+        routing_engine,
+        token_chain_map,
+        chain_supported,
+        token_supported,
+    );
 
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods([
-        Method::GET,
-        Method::POST,
-        Method::PATCH,
-    ]);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::PATCH])
+        .allow_headers(Any);
 
     let app = service_controller.router().layer(cors);
 
@@ -165,14 +166,7 @@ async fn run_solver(config: Config) {
         .await
         .expect("Failed to bind port");
 
-    // todo: fix the graceful shutdown
-    axum::serve(listener, app.into_make_service())
-        // .with_graceful_shutdown(shutdown_signal(shutdown_tx.clone()))
-        .await
-        .unwrap();
-
-    let _ = shutdown_tx.send(());
-    let _ = cache_update_handle.abort();
+    axum::serve(listener, app.into_make_service()).await.unwrap();
 
     info!("Server stopped.");
 }
@@ -209,26 +203,4 @@ async fn run_indexer(config: Config) {
         Ok(_) => info!("Indexer Job Completed"),
         Err(e) => error!("Indexer Job Failed: {}", e),
     };
-}
-
-async fn shutdown_signal(shutdown_tx: broadcast::Sender<()>) {
-    let ctrl_c = async {
-        signal::ctrl_c().await.expect("Unable to handle ctrl+c");
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("Failed to install signal handler")
-            .recv()
-            .await;
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    info!("signal received, starting graceful shutdown");
-    let _ = shutdown_tx.send(());
 }

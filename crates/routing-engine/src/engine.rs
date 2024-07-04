@@ -6,8 +6,7 @@ use log::{debug, error, info};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use account_aggregation::service::AccountAggregationService;
-use account_aggregation::types::Balance;
+use account_aggregation::{service::AccountAggregationService, types::ExtractedBalance};
 use config::{config::BucketConfig, ChainConfig, SolverConfig, TokenConfig};
 use storage::{RedisClient, RedisClientError};
 
@@ -112,24 +111,25 @@ impl RoutingEngine {
         // Sort direct assets by A^x / C^y, here x=2 and y=1
         let x = self.estimates.x_value;
         let y = self.estimates.y_value;
-        let mut sorted_assets: Vec<(&Balance, f64)> = stream::iter(direct_assets.into_iter())
-            .then(|balance| async move {
-                let fee_cost = self
-                    .get_cached_data(
-                        balance.amount_in_usd,
-                        PathQuery(
-                            balance.chain_id,
-                            to_chain,
-                            balance.token.to_string(),
-                            to_token.to_string(),
-                        ),
-                    )
-                    .await
-                    .unwrap_or_default();
-                (balance, fee_cost)
-            })
-            .collect()
-            .await;
+        let mut sorted_assets: Vec<(&ExtractedBalance, f64)> =
+            stream::iter(direct_assets.into_iter())
+                .then(|balance| async move {
+                    let fee_cost = self
+                        .get_cached_data(
+                            balance.amount_in_usd,
+                            PathQuery(
+                                balance.chain_id,
+                                to_chain,
+                                balance.token.to_string(),
+                                to_token.to_string(),
+                            ),
+                        )
+                        .await
+                        .unwrap_or_default();
+                    (balance, fee_cost)
+                })
+                .collect()
+                .await;
 
         sorted_assets.sort_by(|a, b| {
             let cost_a = (a.0.amount.powf(x)) / (a.1.powf(y));
@@ -187,26 +187,27 @@ impl RoutingEngine {
 
         // Handle swap/bridge for remaining amount if needed (non direct assets)
         if total_amount_needed > 0.0 {
-            let swap_assets: Vec<&Balance> =
+            let swap_assets: Vec<&ExtractedBalance> =
                 user_balances.iter().filter(|balance| balance.token != to_token).collect();
-            let mut sorted_assets: Vec<(&Balance, f64)> = stream::iter(swap_assets.into_iter())
-                .then(|balance| async move {
-                    let fee_cost = self
-                        .get_cached_data(
-                            balance.amount_in_usd,
-                            PathQuery(
-                                balance.chain_id,
-                                to_chain,
-                                balance.token.clone(),
-                                to_token.to_string(),
-                            ),
-                        )
-                        .await
-                        .unwrap_or_default();
-                    (balance, fee_cost)
-                })
-                .collect()
-                .await;
+            let mut sorted_assets: Vec<(&ExtractedBalance, f64)> =
+                stream::iter(swap_assets.into_iter())
+                    .then(|balance| async move {
+                        let fee_cost = self
+                            .get_cached_data(
+                                balance.amount_in_usd,
+                                PathQuery(
+                                    balance.chain_id,
+                                    to_chain,
+                                    balance.token.clone(),
+                                    to_token.to_string(),
+                                ),
+                            )
+                            .await
+                            .unwrap_or_default();
+                        (balance, fee_cost)
+                    })
+                    .collect()
+                    .await;
 
             sorted_assets.sort_by(|a, b| {
                 let cost_a = (a.0.amount.powf(x)) / (a.1.powf(y));
@@ -316,14 +317,14 @@ impl RoutingEngine {
     async fn get_user_balance_from_agg_service(
         &self,
         account: &str,
-    ) -> Result<Vec<Balance>, RoutingEngineError> {
+    ) -> Result<Vec<ExtractedBalance>, RoutingEngineError> {
         let balance = self
             .aas_client
             .get_user_accounts_balance(&account.to_string())
             .await
             .map_err(|e| RoutingEngineError::UserBalanceFetchError(e.to_string()))?;
 
-        let balance = balance
+        let balance: Vec<ExtractedBalance> = balance
             .into_iter()
             .filter(|balance| {
                 self.chain_configs.contains_key(&balance.chain_id)
