@@ -1,11 +1,8 @@
-use std::fmt::Debug;
-
-use derive_more::Display;
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
+use std::fmt::Debug;
 use thiserror::Error;
-
 use crate::token_price::TokenPriceProvider;
 
 pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
@@ -74,7 +71,7 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::{Config, get_sample_config};
+    use config::{get_sample_config, Config};
 
     use crate::token_price::TokenPriceProvider;
 

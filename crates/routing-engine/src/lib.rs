@@ -1,5 +1,4 @@
 use derive_more::Display;
-use serde::{ser::SerializeStruct, Serialize};
 use thiserror::Error;
 
 use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};

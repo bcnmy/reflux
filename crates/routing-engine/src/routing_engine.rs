@@ -6,14 +6,13 @@ use log::{debug, error, info};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use account_aggregation::service::AccountAggregationService;
-use account_aggregation::types::TokenWithBalance;
-use config::{ChainConfig, config::BucketConfig, SolverConfig, TokenConfig};
+use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
+use config::{config::BucketConfig, ChainConfig, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
-    BridgeResult,
-    estimator::{Estimator, LinearRegressionEstimator}, Route,
+    estimator::{Estimator, LinearRegressionEstimator},
+    BridgeResult, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -251,7 +250,7 @@ impl RoutingEngine {
             .await
             .map_err(|e| RoutingEngineError::UserBalanceFetchError(e.to_string()))?;
 
-        let balance = balance
+        let balance: Vec<_> = balance
             .into_iter()
             .filter(|balance| {
                 self.chain_configs.contains_key(&balance.chain_id)
@@ -309,12 +308,12 @@ mod tests {
     use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
+    use crate::estimator::Estimator;
+    use crate::routing_engine::PathQuery;
     use crate::{
         estimator::{DataPoint, LinearRegressionEstimator},
         routing_engine::{RoutingEngine, RoutingEngineError},
     };
-    use crate::estimator::Estimator;
-    use crate::routing_engine::PathQuery;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
