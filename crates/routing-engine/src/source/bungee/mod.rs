@@ -270,6 +270,7 @@ impl RouteSource for BungeeClient {
             chain_id: tx.chain_id,
             token_address: tx.approval_data.approval_token_address,
             spender: tx.approval_data.owner,
+            target: tx.approval_data.allowance_target,
             amount: Uint::from_str(&tx.approval_data.minimum_approval_amount).map_err(|err| {
                 error!("Error while parsing approval data: {}", err);
                 GenerateRouteTransactionsError::InvalidU256Error(

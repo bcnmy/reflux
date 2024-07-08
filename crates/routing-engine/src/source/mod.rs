@@ -19,6 +19,7 @@ pub struct RequiredApprovalDetails {
     pub chain_id: u32,
     pub token_address: String,
     pub spender: String,
+    pub target: String,
     pub amount: U256,
 }
 
