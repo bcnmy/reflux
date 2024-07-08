@@ -276,7 +276,7 @@ impl AccountAggregationService {
                                 let api_response: Result<CovalentApiResponse, _> =
                                     response.json().await;
                                 match api_response {
-                                    Ok(api_response) => extract_balance_data(api_response),
+                                    Ok(api_response) => extract_balance_data(api_response, user),
                                     Err(e) => Err(AccountAggregationError::ReqwestError(e)),
                                 }
                             }
@@ -305,6 +305,7 @@ impl AccountAggregationService {
 /// Extract balance data from the API response
 fn extract_balance_data(
     api_response: CovalentApiResponse,
+    user: &String,
 ) -> Result<Vec<TokenWithBalance>, AccountAggregationError> {
     let chain_id = api_response.data.chain_id.to_string();
     let results = api_response
@@ -328,6 +329,7 @@ fn extract_balance_data(
                 let balance = balance_raw / 10f64.powf(item.contract_decimals.unwrap() as f64);
 
                 Some(TokenWithBalance {
+                    address: user.clone(),
                     token: token.clone(),
                     token_address: item.contract_ticker_symbol.clone().unwrap(),
                     chain_id: chain_id.clone().parse::<u32>().unwrap(),

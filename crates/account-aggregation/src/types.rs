@@ -21,6 +21,7 @@ pub struct CovalentTokenData {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct TokenWithBalance {
+    pub address: String,
     pub token: String,
     pub token_address: String,
     pub chain_id: u32,
