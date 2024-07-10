@@ -9,7 +9,7 @@ pub use token_price::CoingeckoClient;
 pub mod routing_engine;
 pub mod token_price;
 
-mod erc20_utils;
+mod contracts;
 pub mod estimator;
 pub mod indexer;
 mod settlement_engine;

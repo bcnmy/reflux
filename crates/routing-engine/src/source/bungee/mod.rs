@@ -194,7 +194,7 @@ impl RouteSource for BungeeClient {
 
         if failed.len() > 0 {
             let failed: Vec<serde_json::Value> =
-                failed.into_iter().map(|(route, r)| route).collect();
+                failed.into_iter().map(|(route, _)| route).collect();
             error!("Error while calculating route costs in usd: {:?}", failed);
         }
 
@@ -269,7 +269,7 @@ impl RouteSource for BungeeClient {
         let approvals = vec![RequiredApprovalDetails {
             chain_id: tx.chain_id,
             token_address: tx.approval_data.approval_token_address,
-            spender: tx.approval_data.owner,
+            owner: tx.approval_data.owner,
             target: tx.approval_data.allowance_target,
             amount: Uint::from_str(&tx.approval_data.minimum_approval_amount).map_err(|err| {
                 error!("Error while parsing approval data: {}", err);

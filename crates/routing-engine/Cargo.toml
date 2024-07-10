@@ -20,6 +20,7 @@ log = "0.4.21"
 account-aggregation = { workspace = true }
 storage = { workspace = true }
 config = { workspace = true }
+alloy = { version = "0.1.4", features = ["full"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
