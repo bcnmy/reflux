@@ -58,4 +58,4 @@ jobs:
       gcp_provider_id: 'ga-reflux'
       # LOCATION-docker.pkg.dev/PROJECT-ID/REPOSITORY/IMAGE
       gcp_registry: 'us-docker.pkg.dev/biconomy-prod/biconomy-prod/reflux'
-      gcp_service_account: 'sa-airdrop-stakers@prj-workload-identity-001.iam.gserviceaccount.com'
+      gcp_service_account: 'sa-reflux@prj-workload-identity-001.iam.gserviceaccount.com'

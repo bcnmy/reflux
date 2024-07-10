@@ -57,11 +57,10 @@
           gcp_provider_id: 'ga-reflux'
           # LOCATION-docker.pkg.dev/PROJECT-ID/REPOSITORY/IMAGE
           gcp_registry: 'us-docker.pkg.dev/biconomy-prod/biconomy-prod/reflux'
-          gcp_service_account: 'sa-airdrop-stakers@prj-workload-identity-001.iam.gserviceaccount.com'
+          gcp_service_account: 'sa-reflux@prj-workload-identity-001.iam.gserviceaccount.com'
     
       deploy_prod:
         needs: [container_img_build_push_gar]
-        # environment: tw-prod
         # Allow the job to fetch a GitHub ID token
         # runs-on: ubuntu-latest
         permissions:
@@ -81,7 +80,7 @@
           # gcp_provider_id: 'ga-GITHUB_REPO_NAME'
           gcp_provider_id: 'ga-reflux'
           # SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT}@${PROJECT}.iam.gserviceaccount.com"
-          gcp_service_account: 'sa-airdrop-stakers@prj-workload-identity-001.iam.gserviceaccount.com'
+          gcp_service_account: 'sa-reflux@prj-workload-identity-001.iam.gserviceaccount.com'
           gcp_cluster_name: 'biconomy-prod'
           gcp_cluster_location: 'us-east1'
           use_internal_ip: false
