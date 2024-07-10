@@ -135,7 +135,7 @@ cronjob:
     - reflux
     - --indexer
     - --config
-    -  "/usr/local/cargo/config.toml" 
+    -  /home/nonroot/reflux/config.toml
   restartPolicy: OnFailure
 
 

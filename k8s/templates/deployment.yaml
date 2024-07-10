@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.name }}
+  name: {{ .Values.name }}-solver
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.name }}
@@ -62,7 +62,7 @@ spec:
       containers:
       - name: {{ .Values.name }}
         image: {{ .Values.image_name }}:{{ .Values.image_tag }}
-        command: [ "reflux", "--solver", "--config", "/usr/local/cargo/config.toml" ]
+        command: [ "reflux", "--solver", "--config", "/home/nonroot/reflux/config.yaml" ]
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         ports:
         - containerPort: {{ .Values.port }}
@@ -78,8 +78,8 @@ spec:
           - mountPath: /var/run/datadog
             name: apmsocketpath
           - name: config-volume
-            mountPath: /usr/local/cargo/config.toml
-            subPath: config.toml
+            mountPath: /home/nonroot/reflux/config.yaml
+            subPath: config.yaml
       {{- end }} 
       {{- if .Values.probes }}
         livenessProbe:
