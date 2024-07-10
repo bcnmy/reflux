@@ -7,12 +7,12 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
-use config::{config::BucketConfig, ChainConfig, SolverConfig, TokenConfig};
+use config::{ChainConfig, config::BucketConfig, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
-    estimator::{Estimator, LinearRegressionEstimator},
-    BridgeResult, Route,
+    BridgeResult,
+    estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -322,12 +322,12 @@ mod tests {
     use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
-    use crate::estimator::Estimator;
-    use crate::routing_engine::PathQuery;
     use crate::{
         estimator::{DataPoint, LinearRegressionEstimator},
         routing_engine::{RoutingEngine, RoutingEngineError},
     };
+    use crate::estimator::Estimator;
+    use crate::routing_engine::PathQuery;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
@@ -477,12 +477,14 @@ mod tests {
             name: "bsc-mainnet".to_string(),
             is_enabled: true,
             covalent_name: "bsc-mainnet".to_string(),
+            rpc_url: "https://bsc-dataseed.binance.org".to_string(),
         };
         let chain_config2 = ChainConfig {
             id: 2,
             name: "eth-mainnet".to_string(),
             is_enabled: true,
             covalent_name: "ethereum".to_string(),
+            rpc_url: "https://mainnet.infura.io/v3/".to_string(),
         };
         let mut chain_configs = HashMap::new();
         chain_configs.insert(56, chain_config1);

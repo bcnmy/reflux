@@ -33,7 +33,7 @@ pub struct SettlementEngine<
     >,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TransactionType {
     Approval,
     Bridge,
@@ -242,6 +242,11 @@ impl<
         let merged_approvals: Vec<RequiredApprovalDetails> = approvals_grouped
             .into_iter()
             .map(|(_, approvals)| {
+                // If there's only one approval in this group, return it
+                if approvals.len() == 1 {
+                    return approvals[0].clone();
+                }
+
                 let mut amount =
                     approvals.iter().map(|approval| approval.amount).reduce(|a, b| (a + b));
 
@@ -321,4 +326,346 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::env;
+    use std::time::Duration;
+
+    use alloy::primitives::U256;
+    use alloy::providers::{ProviderBuilder, RootProvider};
+    use alloy::sol_types::SolCall;
+    use alloy::transports::http::Http;
+    use derive_more::Display;
+    use reqwest::{Client, Url};
+    use thiserror::Error;
+
+    use config::{Config, get_sample_config};
+    use storage::{KeyValueStore, RedisClientError};
+
+    use crate::{BungeeClient, CoingeckoClient};
+    use crate::contracts::ERC20ContractInstance;
+    use crate::settlement_engine::{SettlementEngine, TransactionType};
+    use crate::source::RequiredApprovalDetails;
+
+    #[derive(Error, Debug, Display)]
+    struct Err;
+
+    #[derive(Default, Debug)]
+    struct KVStore {
+        map: RefCell<HashMap<String, String>>,
+    }
+
+    impl KeyValueStore for KVStore {
+        type Error = Err;
+
+        async fn get(&self, k: &String) -> Result<String, Self::Error> {
+            match self.map.borrow().get(k) {
+                Some(v) => Ok(v.clone()),
+                None => Result::Err(Err),
+            }
+        }
+
+        async fn get_multiple(&self, _: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+            unimplemented!()
+        }
+
+        async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
+            self.map
+                .borrow_mut()
+                .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
+            Ok(())
+        }
+
+        async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+            unimplemented!()
+        }
+
+        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+            unimplemented!()
+        }
+    }
+
+    fn setup_config<'a>() -> Config {
+        get_sample_config()
+    }
+
+    fn setup<'config: 'key, 'key>(
+        config: &'config Config,
+    ) -> SettlementEngine<
+        'config,
+        'key,
+        BungeeClient,
+        CoingeckoClient<KVStore>,
+        Http<Client>,
+        RootProvider<Http<Client>>,
+    > {
+        let bungee_client = BungeeClient::new(
+            &"https://api.socket.tech/v2".to_string(),
+            &env::var("BUNGEE_API_KEY").unwrap().to_string(),
+        )
+        .unwrap();
+
+        let client = CoingeckoClient::new(
+            config.coingecko.base_url.clone(),
+            env::var("COINGECKO_API_KEY").unwrap(),
+            KVStore::default(),
+            Duration::from_secs(config.coingecko.expiry_sec),
+        );
+
+        let erc20_instance_map = config
+            .tokens
+            .iter()
+            .flat_map(|(_, token)| {
+                token
+                    .by_chain
+                    .iter()
+                    .map(|(chain_id, chain_specific_config)| {
+                        let rpc_url = &config
+                            .chains
+                            .iter()
+                            .find(|(&id, _)| id == *chain_id)
+                            .expect(format!("Chain not found for id: {}", chain_id).as_str())
+                            .1
+                            .rpc_url;
+
+                        let provider = ProviderBuilder::new().on_http(
+                            Url::parse(rpc_url.as_str())
+                                .expect(format!("Invalid RPC URL: {}", rpc_url).as_str()),
+                        );
+
+                        let token_address = chain_specific_config.address.clone().parse().expect(
+                            format!("Invalid address: {}", chain_specific_config.address).as_str(),
+                        );
+
+                        let token = ERC20ContractInstance::new(token_address, provider);
+
+                        ((*chain_id, &chain_specific_config.address), token)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let settlement_engine =
+            SettlementEngine::new(&config, bungee_client, client, erc20_instance_map);
+
+        return settlement_engine;
+    }
+
+    const TEST_OWNER_WALLET: &str = "0xe0E67a6F478D7ED604Cf528bDE6C3f5aB034b59D";
+    const TOKEN_ADDRESS_USDC_42161: &str = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831";
+    // Target has currently 0 approval for token on arbitrum mainnet for USDC token
+    const TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC: &str =
+        "0x22f966A213288B29bB1F650a923E8f70dAd2515A";
+    // Target has 100 approval for token on arbitrum mainnet for USDC token
+    const TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC: &str =
+        "0xE4ec34b790e2fCabF37Cc9938A34327ddEadDc78";
+
+    #[tokio::test]
+    async fn test_should_generate_required_approval_transaction() {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let required_approval_data = RequiredApprovalDetails {
+            chain_id: 42161,
+            token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+            owner: TEST_OWNER_WALLET.to_string(),
+            target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+            amount: U256::from(100),
+        };
+
+        let transaction = engine
+            .generate_transaction_for_approval(&required_approval_data)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(transaction.transaction_type, TransactionType::Approval);
+        assert_eq!(transaction.transaction.to, TOKEN_ADDRESS_USDC_42161);
+        assert_eq!(transaction.transaction.value, U256::ZERO);
+        assert_eq!(
+            transaction.transaction.calldata,
+            engine
+                .erc20_instance_map
+                .get(&(required_approval_data.chain_id, &required_approval_data.token_address))
+                .expect("ERC20 Utils not found")
+                .approve(
+                    TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
+                        .to_string()
+                        .parse()
+                        .expect("Invalid address"),
+                    U256::from(100)
+                )
+                .calldata()
+                .to_string()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_should_take_existing_approval_into_consideration_while_building_approval_data() {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let required_approval_data = RequiredApprovalDetails {
+            chain_id: 42161,
+            token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+            owner: TEST_OWNER_WALLET.to_string(),
+            target: TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+            amount: U256::from(150),
+        };
+
+        let transaction = engine
+            .generate_transaction_for_approval(&required_approval_data)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(transaction.transaction_type, TransactionType::Approval);
+        assert_eq!(transaction.transaction.to, TOKEN_ADDRESS_USDC_42161);
+        assert_eq!(transaction.transaction.value, U256::ZERO);
+        assert_eq!(
+            transaction.transaction.calldata,
+            engine
+                .erc20_instance_map
+                .get(&(required_approval_data.chain_id, &required_approval_data.token_address))
+                .expect("ERC20 Utils not found")
+                .approve(
+                    TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
+                        .to_string()
+                        .parse()
+                        .expect("Invalid address"),
+                    U256::from(50)
+                )
+                .calldata()
+                .to_string()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_should_generate_approvals_for_multiple_required_transactions() {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let required_approval_datas = vec![
+            RequiredApprovalDetails {
+                chain_id: 42161,
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                owner: TEST_OWNER_WALLET.to_string(),
+                target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+                amount: U256::from(100),
+            },
+            RequiredApprovalDetails {
+                chain_id: 42161,
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                owner: TEST_OWNER_WALLET.to_string(),
+                target: TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+                amount: U256::from(150),
+            },
+        ];
+
+        let mut transactions =
+            engine.generate_transactions_for_approvals(&required_approval_datas).await.unwrap();
+        transactions.sort_by(|a, b| a.transaction.calldata.cmp(&b.transaction.calldata));
+
+        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert_eq!(transactions[0].transaction.to, TOKEN_ADDRESS_USDC_42161);
+        assert_eq!(transactions[0].transaction.value, U256::ZERO);
+        assert_eq!(
+            transactions[0].transaction.calldata,
+            engine
+                .erc20_instance_map
+                .get(&(
+                    required_approval_datas[0].chain_id,
+                    &required_approval_datas[0].token_address
+                ))
+                .expect("ERC20 Utils not found")
+                .approve(
+                    TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
+                        .to_string()
+                        .parse()
+                        .expect("Invalid address"),
+                    U256::from(100)
+                )
+                .calldata()
+                .to_string()
+        );
+
+        assert_eq!(transactions[1].transaction_type, TransactionType::Approval);
+        assert_eq!(transactions[1].transaction.to, TOKEN_ADDRESS_USDC_42161);
+        assert_eq!(transactions[1].transaction.value, U256::ZERO);
+        assert_eq!(
+            transactions[1].transaction.calldata,
+            engine
+                .erc20_instance_map
+                .get(&(
+                    required_approval_datas[1].chain_id,
+                    &required_approval_datas[1].token_address
+                ))
+                .expect("ERC20 Utils not found")
+                .approve(
+                    TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
+                        .to_string()
+                        .parse()
+                        .expect("Invalid address"),
+                    U256::from(50)
+                )
+                .calldata()
+                .to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_should_merge_approvals_from_same_owner_to_same_spender_for_same_token_and_chain()
+    {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let required_approval_datas = vec![
+            RequiredApprovalDetails {
+                chain_id: 42161,
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                owner: TEST_OWNER_WALLET.to_string(),
+                target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+                amount: U256::from(100),
+            },
+            RequiredApprovalDetails {
+                chain_id: 42161,
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                owner: TEST_OWNER_WALLET.to_string(),
+                target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
+                amount: U256::from(150),
+            },
+        ];
+
+        let transactions =
+            engine.generate_transactions_for_approvals(&required_approval_datas).await.unwrap();
+
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert_eq!(transactions[0].transaction.to, TOKEN_ADDRESS_USDC_42161);
+        assert_eq!(transactions[0].transaction.value, U256::ZERO);
+        assert_eq!(
+            transactions[0].transaction.calldata,
+            engine
+                .erc20_instance_map
+                .get(&(
+                    required_approval_datas[0].chain_id,
+                    &required_approval_datas[0].token_address
+                ))
+                .expect("ERC20 Utils not found")
+                .approve(
+                    TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
+                        .to_string()
+                        .parse()
+                        .expect("Invalid address"),
+                    U256::from(250)
+                )
+                .calldata()
+                .to_string()
+        );
+    }
+}

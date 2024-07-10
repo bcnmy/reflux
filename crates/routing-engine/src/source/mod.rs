@@ -14,7 +14,7 @@ pub struct EthereumTransaction {
     pub calldata: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequiredApprovalDetails {
     pub chain_id: u32,
     pub token_address: String,
