@@ -3,10 +3,12 @@ chains:
     name: Ethereum
     covalent_name: eth-mainnet
     is_enabled: true
+    rpc_url: https://mainnet.infura.io/v3/your-api
   - id: 42161
     name: Arbitrum
     is_enabled: true
     covalent_name: bsc-mainnet
+    rpc_url: https://arb1.arbitrum.io/rpc
 tokens:
   - symbol: USDC
     is_enabled: true

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use alloy::dyn_abi::DynSolType::Address;
 use alloy::hex::FromHexError;
-use alloy::primitives::address;
 use alloy::providers::Provider;
 use alloy::transports::Transport;
 use futures::StreamExt;
@@ -318,6 +316,9 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
     #[error("Error parsing address: {0}")]
     InvalidAddressError(FromHexError),
 
-    #[error("Error in ERC20 Contract: {0}")]
+    #[error("Error while calling ERC20 Contract: {0}")]
     AlloyError(#[from] alloy::contract::Error),
 }
+
+#[cfg(test)]
+mod tests {}

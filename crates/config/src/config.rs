@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -311,6 +311,11 @@ pub struct ChainConfig {
     // The name of the chain in Covalent API
     #[validate(min_length = 1)]
     pub covalent_name: String,
+    // The RPC URL of the chain
+    #[validate(
+        pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    )]
+    pub rpc_url: String,
 }
 
 #[derive(Debug, Deserialize, Validate, Clone)]
@@ -463,10 +468,12 @@ chains:
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
+    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
   - id: 1
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
+    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
 tokens:
 buckets:
 bungee:
