@@ -1,0 +1,32 @@
+kind: CronJob
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    {{- include "reflux.labels" . | nindent 4 }}
+  {{- if .Values.datadog.enable }}
+    {{- include "datadog.datatrace" $ | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: "{{ .Values.cronjob.schedule }}"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+            labels:
+                app: {{ .Values.name }}
+            {{- if .Values.datadog.enable }}
+                {{- include "datadog.datatrace" $ | nindent 8 }}
+                {{- include "datadog.datatrace-admission" $ | nindent 8 }}
+            {{- end }}
+        spec:
+          containers:
+          - name: {{ .Values.name }}
+            image: {{ .Values.image_name }}:{{ .Values.image_tag }}
+            imagePullPolicy: {{ .Values.imagePullPolicy }}
+            command:
+            {{- range .Values.cronjob.command }}
+              - {{ . }}
+            {{- end }}
+          restartPolicy: {{ .Values.cronjob.restartPolicy }}

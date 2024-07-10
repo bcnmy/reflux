@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.name }}
+    {{- include "reflux.labels" . | nindent 4 }}
+  {{- if .Values.datadog.enable }}
+    {{- include "datadog.datatrace" $ | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replica }}
+  selector:
+    matchLabels:
+      app: {{ .Values.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.name }}
+      {{- if .Values.datadog.enable }}
+        {{- include "datadog.datatrace" $ | nindent 8 }}
+        {{- include "datadog.datatrace-admission" $ | nindent 8 }}
+      {{- end }}
+      annotations:
+        releaseTime: {{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}
+      {{- if .Values.datadog.enable }}
+        admission.us5.datadoghq.com/js-lib.version: {{ .Values.datadog.lib_version }}
+      {{- end }}
+    spec:
+      {{- if .Values.affinity }}
+      affinity:
+        {{- if .Values.affinity.antiAffinity }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - {{ .Values.name }}
+              topologyKey:  {{ .Values.affinity.antiAffinity.topologyKey }}
+            weight: {{ .Values.affinity.antiAffinity.weight }}
+        {{- end }} 
+        {{- if .Values.affinity.affinityTolerations }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.affinity.affinityTolerations.key }}
+                operator: In
+                values:
+                - {{ .Values.affinity.affinityTolerations.values }}
+      tolerations:
+      - effect: NoSchedule
+        key: {{ .Values.affinity.affinityTolerations.key }}
+        operator: Equal
+        value: {{ .Values.affinity.affinityTolerations.values }}
+      {{- end }} 
+      {{- end }} 
+      containers:
+      - name: {{ .Values.name }}
+        image: {{ .Values.image_name }}:{{ .Values.image_tag }}
+        command: [ "reflux", "--solver", "--config", "/usr/local/cargo/config.toml" ]
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        ports:
+        - containerPort: {{ .Values.port }}
+        envFrom:
+          - secretRef:
+                name: {{ .Values.name }}
+          {{- if .Values.datadog.enable }}
+          - configMapRef:
+                name: {{ .Values.name }}-dd-configmap
+          {{- end }}
+      {{- if .Values.datadog.enable }}
+        volumeMounts:
+          - mountPath: /var/run/datadog
+            name: apmsocketpath
+          - name: config-volume
+            mountPath: /usr/local/cargo/config.toml
+            subPath: config.toml
+      {{- end }} 
+      {{- if .Values.probes }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.probes.healthEndpoint }}
+            port: {{ .Values.port }}
+{{ toYaml .Values.probes.liveness | indent 10 }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.probes.healthEndpoint }}
+            port: {{ .Values.port }}
+{{ toYaml .Values.probes.readiness | indent 10 }}
+      {{- end }}
+        resources:
+          requests:
+            memory: {{ .Values.resource.requests.memory }}
+            cpu: {{ .Values.resource.requests.cpu }}
+          limits:
+            memory: {{ .Values.resource.limits.memory }}
+            cpu: {{ .Values.resource.limits.cpu }}
+      {{- if .Values.datadog.enable }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ .Values.name }}
+        - hostPath:
+            path: /var/run/datadog/
+          name: apmsocketpath
+      {{- end }}

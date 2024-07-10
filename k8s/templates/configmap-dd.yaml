@@ -1,0 +1,11 @@
+{{- if .Values.datadog.enable }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-dd-configmap
+  namespace: {{ .Values.namespace }}
+data:
+{{- range $key, $value := .Values.datadog.configs }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}         
+{{- end }} 
