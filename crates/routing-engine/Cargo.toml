@@ -24,3 +24,6 @@ alloy = { version = "0.1.4", features = ["full"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
+
+[lib]
+doctest = false
