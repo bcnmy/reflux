@@ -71,7 +71,7 @@
           environment: 'prod'
           # GCP project where the identity provider is
           # gcloud projects describe prj-workload-identity-001
-          gcp_project_number: '995026225565'
+          gcp_project_number: '766873424314'
           gcp_project_id: 'biconomy-prod'
           gcp_bastion: ''
           gcp_bastion_zone: ''
