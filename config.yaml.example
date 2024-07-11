@@ -3,12 +3,12 @@ chains:
     name: Ethereum
     covalent_name: eth-mainnet
     is_enabled: true
-    rpc_url: https://mainnet.infura.io/v3/your-api
+    rpc_url: https://rpc.ankr.com/eth
   - id: 42161
     name: Arbitrum
     is_enabled: true
-    covalent_name: bsc-mainnet
-    rpc_url: https://arb1.arbitrum.io/rpc
+    covalent_name: arbitrum-mainnet
+    rpc_url: https://arbitrum.llamarpc.com
 tokens:
   - symbol: USDC
     is_enabled: true
@@ -18,6 +18,18 @@ tokens:
         is_enabled: true
         decimals: 6
         address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+      42161:
+        is_enabled: true
+        decimals: 6
+        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'       
+  - symbol: USDT
+    is_enabled: true
+    coingecko_symbol: tether
+    by_chain:
+      1:
+        is_enabled: true
+        decimals: 6
+        address: '0xdac17f958d2ee523a2206206994597c13d831ec7'
       42161:
         is_enabled: true
         decimals: 6

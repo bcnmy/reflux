@@ -36,7 +36,7 @@ pub struct SettlementEngine<
 #[derive(Debug, PartialEq)]
 pub enum TransactionType {
     Approval,
-    Bridge,
+    Bungee,
 }
 
 #[derive(Debug)]
@@ -132,15 +132,15 @@ impl<
             return Err(SettlementEngineErrors::NoTransactionsGenerated);
         }
 
-        let (ethereum_transactions, required_approval_details): (Vec<Vec<_>>, Vec<Vec<_>>) =
+        let (bridge_transactions, required_approval_details): (Vec<Vec<_>>, Vec<Vec<_>>) =
             results.into_iter().map(Result::unwrap).unzip();
 
-        let mut ethereum_transactions: Vec<_> = ethereum_transactions
+        let bridge_transactions: Vec<_> = bridge_transactions
             .into_iter()
             .flatten()
             .map(|t| TransactionWithType {
                 transaction: t,
-                transaction_type: TransactionType::Bridge,
+                transaction_type: TransactionType::Bungee,
             })
             .collect();
 
@@ -149,14 +149,17 @@ impl<
         let required_approval_transactions =
             self.generate_transactions_for_approvals(&required_approval_details).await?;
 
-        info!("Generated transactions: {:?}", ethereum_transactions);
+        info!("Generated transactions: {:?}", bridge_transactions);
         info!("Required approvals: {:?}", required_approval_details);
 
-        ethereum_transactions.extend(required_approval_transactions);
+        let final_transactions = vec![required_approval_transactions, bridge_transactions]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
-        info!("Final Transactions: {:?}", ethereum_transactions);
+        info!("Final Transactions: {:?}", final_transactions);
 
-        Ok(ethereum_transactions)
+        Ok(final_transactions)
     }
 
     async fn generate_transaction_for_approval(
@@ -210,6 +213,7 @@ impl<
 
         Ok(Some(TransactionWithType {
             transaction: EthereumTransaction {
+                from: required_approval_details.owner.clone(),
                 to: token_instance.address().to_string(),
                 value: Uint::ZERO,
                 calldata,
@@ -334,7 +338,6 @@ mod tests {
 
     use alloy::primitives::U256;
     use alloy::providers::{ProviderBuilder, RootProvider};
-    use alloy::sol_types::SolCall;
     use alloy::transports::http::Http;
     use derive_more::Display;
     use reqwest::{Client, Url};
@@ -343,7 +346,7 @@ mod tests {
     use config::{Config, get_sample_config};
     use storage::{KeyValueStore, RedisClientError};
 
-    use crate::{BungeeClient, CoingeckoClient};
+    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
     use crate::contracts::ERC20ContractInstance;
     use crate::settlement_engine::{SettlementEngine, TransactionType};
     use crate::source::RequiredApprovalDetails;
@@ -667,5 +670,61 @@ mod tests {
                 .calldata()
                 .to_string()
         );
+    }
+
+    #[tokio::test]
+    async fn test_should_generate_transactions_for_bridging_routes() {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let bridge_result = BridgeResult::build(
+            &config,
+            &1,
+            &42161,
+            &"USDC".to_string(),
+            &"USDC".to_string(),
+            false,
+            100.0,
+            TEST_OWNER_WALLET.to_string(),
+            TEST_OWNER_WALLET.to_string(),
+        )
+        .expect("Failed to build bridge result");
+
+        let transactions = engine
+            .generate_transactions(&vec![bridge_result])
+            .await
+            .expect("Failed to generate transactions");
+
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert_eq!(transactions[1].transaction_type, TransactionType::Bungee);
+    }
+
+    #[tokio::test]
+    async fn test_should_generate_transactions_for_swaps() {
+        let config = setup_config();
+        let engine = setup(&config);
+
+        let bridge_result = BridgeResult::build(
+            &config,
+            &1,
+            &1,
+            &"USDC".to_string(),
+            &"USDT".to_string(),
+            false,
+            100.0,
+            TEST_OWNER_WALLET.to_string(),
+            TEST_OWNER_WALLET.to_string(),
+        )
+        .expect("Failed to build bridge result");
+
+        let transactions = engine
+            .generate_transactions(&vec![bridge_result])
+            .await
+            .expect("Failed to generate transactions");
+
+        assert_eq!(transactions.len(), 2);
+        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert_eq!(transactions[1].transaction_type, TransactionType::Bungee);
     }
 }

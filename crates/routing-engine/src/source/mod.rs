@@ -9,6 +9,7 @@ pub mod bungee;
 
 #[derive(Debug)]
 pub struct EthereumTransaction {
+    pub from: String,
     pub to: String,
     pub value: U256,
     pub calldata: String,
@@ -28,7 +29,7 @@ pub trait RouteSource: Debug {
     type GenerateRouteTransactionsError: Debug + Error;
     type BaseRouteType: Debug;
 
-    fn fetch_least_route_and_cost_in_usd(
+    fn fetch_least_cost_route_and_cost_in_usd(
         &self,
         route: &Route,
         from_token_amount: &U256,

@@ -116,7 +116,7 @@ impl RouteSource for BungeeClient {
 
     type BaseRouteType = serde_json::Value;
 
-    async fn fetch_least_route_and_cost_in_usd(
+    async fn fetch_least_cost_route_and_cost_in_usd(
         &self,
         route: &Route<'_>,
         from_token_amount: &U256,
@@ -232,7 +232,7 @@ impl RouteSource for BungeeClient {
         );
 
         let (bungee_route, _) = self
-            .fetch_least_route_and_cost_in_usd(
+            .fetch_least_cost_route_and_cost_in_usd(
                 route,
                 amount,
                 Some(sender_address),
@@ -256,6 +256,7 @@ impl RouteSource for BungeeClient {
         info!("Returned transaction from bungee {:?}", tx);
 
         let transactions = vec![EthereumTransaction {
+            from: sender_address.clone(),
             to: tx.tx_target,
             value: Uint::from_str(&tx.value).map_err(|err| {
                 error!("Error while parsing tx data: {}", err);
@@ -345,7 +346,7 @@ mod tests {
             is_smart_contract_deposit: false,
         };
         let (_, least_route_cost) = client
-            .fetch_least_route_and_cost_in_usd(
+            .fetch_least_cost_route_and_cost_in_usd(
                 &route,
                 &Uint::from(100000000),
                 None,
