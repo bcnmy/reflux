@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use alloy::hex::FromHexError;
-use alloy::providers::{Provider, ProviderBuilder, RootProvider};
+use alloy::providers::{ProviderBuilder, RootProvider};
 use alloy::transports::http::Http;
-use alloy::transports::Transport;
 use futures::StreamExt;
 use log::{error, info};
 use reqwest::{Client, Url};
+use ruint::aliases::U256;
 use ruint::Uint;
 use serde::Serialize;
 use thiserror::Error;
@@ -56,7 +56,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
 
     pub async fn generate_transactions(
         &self,
-        routes: &Vec<BridgeResult>,
+        routes: Vec<BridgeResult>,
     ) -> Result<Vec<TransactionWithType>, SettlementEngineErrors<Source, PriceProvider>> {
         info!("Generating transactions for routes: {:?}", routes);
 
@@ -68,32 +68,35 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                 >,
             >,
             _,
-        ) = futures::stream::iter(routes.iter())
+        ) = futures::stream::iter(routes.into_iter())
             .map(|route| async move {
                 info!("Generating transactions for route: {:?}", route.route);
 
-                let token_amount = get_token_amount_from_value_in_usd(
-                    &self.config,
-                    &self.price_provider,
-                    &route.route.from_token.symbol,
-                    route.route.from_chain.id,
-                    &route.source_amount_in_usd,
-                )
-                .await
-                .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
+                // let token_amount = get_token_amount_from_value_in_usd(
+                //     &self.config,
+                //     &self.price_provider,
+                //     &route.route.from_token.symbol,
+                //     route.route.from_chain.id,
+                //     &route.source_amount_in_usd,
+                // )
+                // .await
+                // .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
+                let token_amount: U256 = Uint::from(100);
 
                 info!("Token amount: {:?} for route {:?}", token_amount, route);
 
-                let (ethereum_transactions, required_approval_details) = self
-                    .source
-                    .generate_route_transactions(
-                        &route.route,
-                        &token_amount,
-                        &route.from_address,
-                        &route.to_address,
-                    )
-                    .await
-                    .map_err(|err| SettlementEngineErrors::GenerateTransactionsError(err))?;
+                // let (ethereum_transactions, required_approval_details) = self
+                //     .source
+                //     .generate_route_transactions(
+                //         &route.route,
+                //         &token_amount,
+                //         &route.from_address,
+                //         &route.to_address,
+                //     )
+                //     .await
+                //     .map_err(|err| SettlementEngineErrors::GenerateTransactionsError(err))?;
+                let ethereum_transactions = Vec::new();
+                let required_approval_details = Vec::new();
 
                 info!("Generated transactions: {:?} for route {:?}", ethereum_transactions, route);
 
@@ -397,9 +400,9 @@ mod tests {
 
     use crate::{BridgeResult, BungeeClient, CoingeckoClient};
     use crate::settlement_engine::{
-        generate_erc20_instance_map, SettlementEngine, TransactionType,
+        generate_erc20_instance_map, SettlementEngine, SettlementEngineErrors, TransactionType,
     };
-    use crate::source::RequiredApprovalDetails;
+    use crate::source::{EthereumTransaction, RequiredApprovalDetails};
 
     #[derive(Error, Debug, Display)]
     struct Err;
@@ -702,7 +705,7 @@ mod tests {
         .expect("Failed to build bridge result");
 
         let transactions = engine
-            .generate_transactions(&vec![bridge_result])
+            .generate_transactions(vec![bridge_result])
             .await
             .expect("Failed to generate transactions");
 
@@ -730,12 +733,22 @@ mod tests {
         .expect("Failed to build bridge result");
 
         let transactions = engine
-            .generate_transactions(&vec![bridge_result])
+            .generate_transactions(vec![bridge_result])
             .await
             .expect("Failed to generate transactions");
 
         assert_eq!(transactions.len(), 2);
         assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
         assert_eq!(transactions[1].transaction_type, TransactionType::Bungee);
+    }
+
+    fn assert_is_send<T: Send>() {}
+
+    #[test]
+    fn test_custom_types_must_be_send() {
+        assert_is_send::<SettlementEngine<BungeeClient, CoingeckoClient<KVStore>>>();
+        assert_is_send::<EthereumTransaction>();
+        assert_is_send::<RequiredApprovalDetails>();
+        assert_is_send::<SettlementEngineErrors<BungeeClient, CoingeckoClient<KVStore>>>();
     }
 }

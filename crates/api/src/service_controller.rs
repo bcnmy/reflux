@@ -249,7 +249,7 @@ impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
         }
 
         let transactions_result =
-            settlement_engine.generate_transactions(&routes_result.unwrap()).await;
+            settlement_engine.generate_transactions(routes_result.unwrap()).await;
 
         if let Err(err) = transactions_result {
             let response = json!({ "error": err.to_string() });
