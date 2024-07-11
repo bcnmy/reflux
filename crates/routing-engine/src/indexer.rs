@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
 
 use futures::stream::StreamExt;
 use log::{error, info};
@@ -13,38 +14,36 @@ const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
 
 pub struct Indexer<
-    'config,
     Source: source::RouteSource,
     ModelStore: storage::KeyValueStore,
     Producer: storage::MessageQueue,
     TokenPriceProvider: token_price::TokenPriceProvider,
 > {
-    config: &'config config::Config,
-    source: &'config Source,
-    model_store: &'config ModelStore,
-    message_producer: &'config Producer,
-    token_price_provider: &'config TokenPriceProvider,
+    config: Arc<config::Config>,
+    source: Source,
+    model_store: ModelStore,
+    message_producer: Producer,
+    token_price_provider: TokenPriceProvider,
 }
 
 impl<
-        'config,
         RouteSource: source::RouteSource,
         ModelStore: storage::KeyValueStore,
         Producer: storage::MessageQueue,
         TokenPriceProvider: token_price::TokenPriceProvider,
-    > Indexer<'config, RouteSource, ModelStore, Producer, TokenPriceProvider>
+    > Indexer<RouteSource, ModelStore, Producer, TokenPriceProvider>
 {
     pub fn new(
-        config: &'config config::Config,
-        source: &'config RouteSource,
-        model_store: &'config ModelStore,
-        message_producer: &'config Producer,
-        token_price_provider: &'config TokenPriceProvider,
+        config: Arc<config::Config>,
+        source: RouteSource,
+        model_store: ModelStore,
+        message_producer: Producer,
+        token_price_provider: TokenPriceProvider,
     ) -> Self {
         Indexer { config, source, model_store, message_producer, token_price_provider }
     }
 
-    fn generate_bucket_observation_points(&self, bucket: &BucketConfig) -> Vec<f64> {
+    fn generate_bucket_observation_points(&self, bucket: &Arc<BucketConfig>) -> Vec<f64> {
         let points_per_bucket = self.config.indexer_config.points_per_bucket;
         (0..points_per_bucket)
             .into_iter()
@@ -58,9 +57,9 @@ impl<
 
     async fn build_estimator<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>>(
         &self,
-        bucket: &'config BucketConfig,
+        bucket: &Arc<BucketConfig>,
         cost_type: &CostType,
-    ) -> Result<Estimator, BuildEstimatorError<'config, 'est_de, Estimator>> {
+    ) -> Result<Estimator, BuildEstimatorError<'est_de, Estimator>> {
         let bucket_id = bucket.get_hash();
         info!("Building estimator for bucket: {:?} with ID: {}", bucket, bucket_id);
 
@@ -85,7 +84,7 @@ impl<
                     let from_token_amount_in_wei =
                         token_price::utils::get_token_amount_from_value_in_usd(
                             &self.config,
-                            self.token_price_provider,
+                            &self.token_price_provider,
                             &bucket.from_token,
                             bucket.from_chain_id,
                             &input_value_in_usd,
@@ -94,11 +93,17 @@ impl<
                         .map_err(|err| IndexerErrors::TokenPriceProviderError(err))?;
 
                     // Get the fee in usd from source
-                    let route = Route::build(bucket, self.config)
+                    let route = Route::build_from_bucket(bucket, &self.config)
                         .map_err(|err| IndexerErrors::RouteBuildError(err))?;
-                    let fee_in_usd = self
+                    let (_, fee_in_usd) = self
                         .source
-                        .fetch_least_route_cost_in_usd(&route, from_token_amount_in_wei, cost_type)
+                        .fetch_least_cost_route_and_cost_in_usd(
+                            &route,
+                            &from_token_amount_in_wei,
+                            None,
+                            None,
+                            cost_type,
+                        )
                         .await
                         .map_err(|err| IndexerErrors::RouteSourceError(err))?;
 
@@ -156,13 +161,13 @@ impl<
 
         if data_points.is_empty() {
             error!("BucketID-{}: No data points were built", bucket_id);
-            return Err(BuildEstimatorError::NoDataPoints(bucket));
+            return Err(BuildEstimatorError::NoDataPoints(bucket.clone()));
         }
 
         // Build the Estimator
         info!("BucketID-{}:All data points fetched, building estimator...", bucket_id);
         let estimator = Estimator::build(data_points)
-            .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket, e))?;
+            .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket.clone(), e))?;
         Ok(estimator)
     }
 
@@ -202,28 +207,27 @@ impl<
     pub async fn run<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>>(
         &self,
     ) -> Result<
-        HashMap<&'config BucketConfig, Estimator>,
+        HashMap<&BucketConfig, Estimator>,
         IndexerErrors<'est_de, TokenPriceProvider, RouteSource, ModelStore, Producer, Estimator>,
     > {
         info!("Running Indexer");
 
         // Build Estimators
-        let (estimators, failed_estimators): (Vec<_>, Vec<_>) = futures::stream::iter(
-            self.config.buckets.iter(),
-        )
-        .map(|bucket: &_| async {
-            // Build the Estimator
-            let estimator = self.build_estimator(bucket, &CostType::Fee).await?;
+        let (estimators, failed_estimators): (Vec<_>, Vec<_>) =
+            futures::stream::iter(self.config.buckets.iter())
+                .map(|bucket: &_| async {
+                    // Build the Estimator
+                    let estimator = self.build_estimator(bucket, &CostType::Fee).await?;
 
-            Ok::<(&BucketConfig, Estimator), BuildEstimatorError<'config, 'est_de, Estimator>>((
-                bucket, estimator,
-            ))
-        })
-        .buffer_unordered(BUCKET_PROCESSING_RATE_LIMIT)
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .partition(|r| r.is_ok());
+                    Ok::<(&BucketConfig, Estimator), BuildEstimatorError<'est_de, Estimator>>((
+                        bucket, estimator,
+                    ))
+                })
+                .buffer_unordered(BUCKET_PROCESSING_RATE_LIMIT)
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .partition(|r| r.is_ok());
 
         let estimator_map: HashMap<&BucketConfig, Estimator> =
             estimators.into_iter().map(|r| r.unwrap()).collect();
@@ -288,25 +292,28 @@ pub enum IndexerErrors<
 }
 
 #[derive(Debug, Error)]
-pub enum BuildEstimatorError<'config, 'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>> {
+pub enum BuildEstimatorError<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>> {
     #[error("No data points found while building estimator for {:?}", _0)]
-    NoDataPoints(&'config BucketConfig),
+    NoDataPoints(Arc<BucketConfig>),
 
     #[error("Estimator build error: {} for bucket {:?}", _1, _0)]
-    EstimatorBuildError(&'config BucketConfig, Estimator::Error),
+    EstimatorBuildError(Arc<BucketConfig>, Estimator::Error),
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::env;
     use std::fmt::Error;
+    use std::sync::Arc;
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
-    use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg};
+    use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg, RedisClientError};
 
     use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
@@ -318,6 +325,8 @@ mod tests {
 
     #[derive(Debug)]
     struct ModelStoreStub;
+
+    #[async_trait]
     impl KeyValueStore for ModelStoreStub {
         type Error = Err;
 
@@ -330,16 +339,26 @@ mod tests {
         }
 
         async fn set(&self, _: &String, _: &String, _: Duration) -> Result<(), Self::Error> {
-            Ok(())
+            todo!()
         }
 
         async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
-            Ok(())
+            todo!()
+        }
+
+        async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+            todo!()
+        }
+
+        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+            todo!()
         }
     }
 
     #[derive(Debug)]
     struct ProducerStub;
+
+    #[async_trait]
     impl MessageQueue for ProducerStub {
         type Error = Err;
 
@@ -358,6 +377,8 @@ mod tests {
 
     #[derive(Debug)]
     struct TokenPriceProviderStub;
+
+    #[async_trait]
     impl TokenPriceProvider for TokenPriceProviderStub {
         type Error = Error;
 
@@ -369,7 +390,7 @@ mod tests {
     fn setup<'a>() -> (Config, BungeeClient, ModelStoreStub, ProducerStub, TokenPriceProviderStub) {
         let mut config = get_sample_config();
         config.buckets = vec![
-            config::BucketConfig {
+            Arc::new(config::BucketConfig {
                 from_chain_id: 1,
                 to_chain_id: 42161,
                 from_token: "USDC".to_string(),
@@ -377,8 +398,8 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 10.0,
                 token_amount_to_usd: 100.0,
-            },
-            config::BucketConfig {
+            }),
+            Arc::new(config::BucketConfig {
                 from_chain_id: 1,
                 to_chain_id: 42161,
                 from_token: "USDC".to_string(),
@@ -386,10 +407,13 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 100.0,
                 token_amount_to_usd: 1000.0,
-            },
+            }),
         ];
 
-        config.bungee.api_key = env::var("BUNGEE_API_KEY").unwrap();
+        config.bungee = Arc::new(config::BungeeConfig {
+            base_url: config.bungee.base_url.clone(),
+            api_key: env::var("BUNGEE_API_KEY").unwrap(),
+        });
 
         let bungee_client =
             BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key).unwrap();
@@ -402,19 +426,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_build_estimator() {
-        let (
-            config,
-            bungee_client,
-            mut model_store,
-            mut message_producer,
-            mut token_price_provider,
-        ) = setup();
+        let (config, bungee_client, model_store, message_producer, token_price_provider) = setup();
+        let config = Arc::new(config);
         let indexer = Indexer::new(
-            &config,
-            &bungee_client,
-            &mut model_store,
-            &mut message_producer,
-            &mut token_price_provider,
+            Arc::clone(&config),
+            bungee_client,
+            model_store,
+            message_producer,
+            token_price_provider,
         );
 
         let estimator = indexer.build_estimator(&config.buckets[0], &CostType::Fee).await;

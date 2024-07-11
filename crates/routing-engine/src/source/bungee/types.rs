@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 #[derive(Deserialize, Debug)]
 pub struct BungeeResponse<T> {
@@ -38,43 +37,12 @@ pub struct BungeeTokenResponse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetQuoteResponse {
-    pub routes: Vec<GetQuoteResponseRoute>,
+    pub routes: Vec<serde_json::Value>,
     pub from_chain_id: Option<u32>,
     pub from_asset: Option<BungeeTokenResponse>,
     pub to_chain_id: Option<u32>,
     pub to_asset: Option<BungeeTokenResponse>,
     pub refuel: Option<GetQuoteResponseRefuel>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct GetQuoteResponseRoute {
-    pub route_id: String,
-    pub is_only_swap_route: bool,
-    pub from_amount: String,
-    pub to_amount: String,
-    #[serde(skip_serializing)]
-    pub used_bridge_names: Vec<String>,
-    pub total_user_tx: u32,
-    pub total_gas_fees_in_usd: f64,
-    pub recipient: String,
-    pub sender: String,
-    pub received_value_in_usd: Option<f64>,
-    pub input_value_in_usd: Option<f64>,
-    pub output_value_in_usd: Option<f64>,
-    pub service_time: u32,
-    pub max_service_time: u32,
-    #[serde(skip_serializing)]
-    pub integrator_fee: GetQuoteResponseRouteIntegratorFee,
-    pub t2b_receiver_address: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct GetQuoteResponseRouteIntegratorFee {
-    pub fee_taker_address: Option<String>,
-    pub amount: Option<String>,
-    pub asset: BungeeTokenResponse,
 }
 
 #[derive(Deserialize, Debug)]
@@ -100,15 +68,31 @@ pub struct GetQuoteResponseRefuelGasFee {
     pub gas_amount: String,
 }
 
-// Errors
-#[derive(Debug, Error)]
-pub enum BungeeClientError {
-    #[error("Error while deserializing response: {0}")]
-    DeserializationError(String, serde_json::Error),
+// POST /build-tx
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildTxRequest {
+    pub(crate) route: serde_json::Value,
+}
 
-    #[error("Error while making request: Request error: {}", _0)]
-    RequestError(#[from] reqwest::Error),
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildTxResponse {
+    pub user_tx_type: String,
+    pub tx_target: String,
+    pub chain_id: u32,
+    pub tx_data: String,
+    pub tx_type: String,
+    pub value: String,
+    pub total_user_tx: Option<u32>,
+    pub approval_data: BuildTxResponseApprovalData,
+}
 
-    #[error("No route returned by Bungee API")]
-    NoRouteError,
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildTxResponseApprovalData {
+    pub minimum_approval_amount: String,
+    pub approval_token_address: String,
+    pub allowance_target: String,
+    pub owner: String,
 }

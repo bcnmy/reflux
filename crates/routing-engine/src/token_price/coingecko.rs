@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::num::ParseFloatError;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use derive_more::Display;
 use log::{error, info};
 use reqwest::{header, StatusCode};
@@ -14,24 +15,24 @@ use crate::token_price::coingecko::CoingeckoClientError::RequestFailed;
 use crate::token_price::TokenPriceProvider;
 
 #[derive(Debug)]
-pub struct CoingeckoClient<'config, KVStore: KeyValueStore> {
-    base_url: &'config String,
+pub struct CoingeckoClient<KVStore: KeyValueStore> {
+    base_url: String,
     client: reqwest::Client,
-    cache: &'config KVStore,
+    cache: KVStore,
     key_expiry: Duration,
 }
 
-impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
+impl<KVStore: KeyValueStore> CoingeckoClient<KVStore> {
     pub fn new(
-        base_url: &'config String,
-        api_key: &'config String,
-        cache: &'config KVStore,
+        base_url: String,
+        api_key: String,
+        cache: KVStore,
         key_expiry: Duration,
-    ) -> CoingeckoClient<'config, KVStore> {
+    ) -> CoingeckoClient<KVStore> {
         let mut headers = header::HeaderMap::new();
         headers.insert(
             "x-cg-pro-api-key",
-            header::HeaderValue::from_str(api_key)
+            header::HeaderValue::from_str(&api_key)
                 .expect("Error while building header value Invalid CoinGecko API Key"),
         );
 
@@ -70,7 +71,8 @@ impl<'config, KVStore: KeyValueStore> CoingeckoClient<'config, KVStore> {
     }
 }
 
-impl<'config, KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<'config, KVStore> {
+#[async_trait]
+impl<KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<KVStore> {
     type Error = CoingeckoClientError<KVStore>;
 
     async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error> {
@@ -134,17 +136,18 @@ struct CoinsIdResponseMarketDataCurrentPrice {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::env;
     use std::fmt::Debug;
+    use std::sync::Mutex;
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
-    use storage::KeyValueStore;
+    use storage::{KeyValueStore, RedisClientError};
 
     use crate::CoingeckoClient;
     use crate::token_price::TokenPriceProvider;
@@ -154,32 +157,42 @@ mod tests {
 
     #[derive(Default, Debug)]
     struct KVStore {
-        map: RefCell<HashMap<String, String>>,
+        map: Mutex<HashMap<String, String>>,
     }
 
+    #[async_trait]
     impl KeyValueStore for KVStore {
         type Error = Err;
 
         async fn get(&self, k: &String) -> Result<String, Self::Error> {
-            match self.map.borrow().get(k) {
+            match self.map.lock().unwrap().get(k) {
                 Some(v) => Ok(v.clone()),
                 None => Result::Err(Err),
             }
         }
 
         async fn get_multiple(&self, _: &Vec<String>) -> Result<Vec<String>, Self::Error> {
-            todo!()
+            unimplemented!()
         }
 
         async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
             self.map
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
             Ok(())
         }
 
         async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
-            todo!()
+            unimplemented!()
+        }
+
+        async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+            unimplemented!()
+        }
+
+        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+            unimplemented!()
         }
     }
 
@@ -196,9 +209,9 @@ mod tests {
         let store = KVStore::default();
 
         let client = CoingeckoClient::new(
-            &config.coingecko.base_url,
-            &api_key,
-            &store,
+            config.coingecko.base_url.clone(),
+            api_key,
+            store,
             Duration::from_secs(config.coingecko.expiry_sec),
         );
         let price = client.get_fresh_token_price(&"usd-coin".to_string()).await.unwrap();
@@ -215,21 +228,21 @@ mod tests {
         let store = KVStore::default();
 
         let client = CoingeckoClient::new(
-            &config.coingecko.base_url,
-            &api_key,
-            &store,
+            config.coingecko.base_url.clone(),
+            api_key,
+            store,
             Duration::from_secs(config.coingecko.expiry_sec),
         );
         let price = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
 
         assert!(price > 0.0);
         let key = "usd-coin_price".to_string();
-        assert_eq!(store.get(&key).await.unwrap().parse::<f64>().unwrap(), price);
+        assert_eq!(client.cache.get(&key).await.unwrap().parse::<f64>().unwrap(), price);
 
         let price2 = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
         assert_eq!(price, price2);
 
-        store.set(&key, &"1.1".to_string(), Duration::from_secs(10)).await.unwrap();
+        client.cache.set(&key, &"1.1".to_string(), Duration::from_secs(10)).await.unwrap();
 
         let price = client.get_token_price(&"usd-coin".to_string()).await.unwrap();
         assert_eq!(price, 1.1);

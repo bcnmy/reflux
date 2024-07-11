@@ -1,14 +1,17 @@
-use derive_more::Display;
+use std::str::FromStr;
+
+use async_trait::async_trait;
 use log::{error, info};
 use reqwest;
 use reqwest::header;
 use ruint::aliases::U256;
+use ruint::Uint;
 use thiserror::Error;
 
 use types::*;
 
-use crate::source::{Calldata, RouteSource};
 use crate::{CostType, Route};
+use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 
 mod types;
 
@@ -19,10 +22,7 @@ pub struct BungeeClient {
 }
 
 impl BungeeClient {
-    pub fn new<'config>(
-        base_url: &'config String,
-        api_key: &'config String,
-    ) -> Result<Self, header::InvalidHeaderValue> {
+    pub fn new(base_url: &String, api_key: &String) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);
 
@@ -45,6 +45,34 @@ impl BungeeClient {
         serde_json::from_str(&raw_text)
             .map_err(|err| BungeeClientError::DeserializationError(raw_text, err))
     }
+
+    async fn build_tx(
+        &self,
+        params: BuildTxRequest,
+    ) -> Result<BungeeResponse<BuildTxResponse>, BungeeClientError> {
+        let response =
+            self.client.post(self.base_url.to_owned() + "/build-tx").json(&params).send().await?;
+        let raw_text = response.text().await?;
+
+        serde_json::from_str(&raw_text)
+            .map_err(|err| BungeeClientError::DeserializationError(raw_text, err))
+    }
+}
+
+// Errors
+#[derive(Debug, Error)]
+pub enum BungeeClientError {
+    #[error("Error while deserializing response: {0}")]
+    DeserializationError(String, serde_json::Error),
+
+    #[error("Error while Serializing Body: {0:?} with error {1:?}")]
+    BodySerializationError(BuildTxRequest, serde_json::Error),
+
+    #[error("Error while making request: Request error: {}", _0)]
+    RequestError(#[from] reqwest::Error),
+
+    #[error("No route returned by Bungee API")]
+    NoRouteError,
 }
 
 const ADDRESS_ZERO: &'static str = "0x0000000000000000000000000000000000000000";
@@ -67,20 +95,34 @@ pub enum BungeeFetchRouteCostError {
     EstimationTypeNotImplementedError(#[from] CostType),
 }
 
-#[derive(Error, Debug, Display)]
-pub struct GenerateRouteCalldataError;
+#[derive(Error, Debug)]
+pub enum GenerateRouteTransactionsError {
+    #[error("Error while fetching least route and cost in USD: {0}")]
+    FetchRouteCostError(#[from] BungeeFetchRouteCostError),
 
+    #[error("Error while calling build transaction api: {0}")]
+    BungeeClientError(#[from] BungeeClientError),
+
+    #[error("Error while parsing U256: {0}")]
+    InvalidU256Error(String),
+}
+
+#[async_trait]
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
 
-    type GenerateRouteCalldataError = GenerateRouteCalldataError;
+    type GenerateRouteTransactionsError = GenerateRouteTransactionsError;
 
-    async fn fetch_least_route_cost_in_usd(
+    type BaseRouteType = serde_json::Value;
+
+    async fn fetch_least_cost_route_and_cost_in_usd(
         &self,
-        route: &Route<'_>,
-        from_token_amount: U256,
+        route: &Route,
+        from_token_amount: &U256,
+        sender_address: Option<&String>,
+        recipient_address: Option<&String>,
         estimation_type: &CostType,
-    ) -> Result<f64, Self::FetchRouteCostError> {
+    ) -> Result<(Self::BaseRouteType, f64), Self::FetchRouteCostError> {
         info!("Fetching least route cost in USD for route {:?} with token amount {} and estimation type {}", route, from_token_amount, estimation_type);
 
         // Build GetQuoteRequest
@@ -111,8 +153,8 @@ impl RouteSource for BungeeClient {
             to_chain_id: route.to_chain.id,
             to_token_address: to_token.address.clone(),
             from_amount: from_token_amount.to_string(),
-            user_address: ADDRESS_ZERO.to_string(),
-            recipient: ADDRESS_ZERO.to_string(),
+            user_address: sender_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
+            recipient: recipient_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
             unique_routes_per_bridge: false,
             is_contract_call: route.is_smart_contract_deposit,
         };
@@ -123,36 +165,123 @@ impl RouteSource for BungeeClient {
             return Err(BungeeFetchRouteCostError::FailureIndicatedInResponseError());
         }
 
+        let get_route_fee = |route: &serde_json::Value| {
+            let total_gas_fees_in_usd = route.get("totalGasFeesInUsd")?.as_f64()?;
+            let input_value_in_usd = route.get("inputValueInUsd")?.as_f64()?;
+            let output_value_in_usd = route.get("outputValueInUsd")?.as_f64()?;
+
+            match estimation_type {
+                CostType::Fee => {
+                    Some(total_gas_fees_in_usd + input_value_in_usd - output_value_in_usd)
+                }
+            }
+        };
+
         // Find the minimum cost across all routes
-        let route_costs_in_usd: Vec<f64> = response
+        let (route_costs_in_usd, failed): (Vec<(serde_json::Value, Option<f64>)>, _) = response
             .result
             .routes
-            .iter()
-            .map(|route| match estimation_type {
-                CostType::Fee => Some(
-                    route.total_gas_fees_in_usd + route.input_value_in_usd?
-                        - route.output_value_in_usd?,
-                ),
+            .into_iter()
+            .map(|route| {
+                let fee = get_route_fee(&route);
+                (route, fee)
             })
-            .filter(|cost| cost.is_some())
-            .map(|cost| cost.unwrap())
-            .collect();
+            .partition(|(_, r)| r.is_some());
+
+        let route_costs_in_usd: Vec<(serde_json::Value, f64)> =
+            route_costs_in_usd.into_iter().map(|(route, r)| (route, r.unwrap())).collect();
+
+        if failed.len() > 0 {
+            let failed: Vec<serde_json::Value> =
+                failed.into_iter().map(|(route, _)| route).collect();
+            error!("Error while calculating route costs in usd: {:?}", failed);
+        }
 
         if route_costs_in_usd.len() == 0 {
             error!("No valid routes returned by Bungee API for route {:?}", route);
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
 
-        info!("Route costs in USD: {:?} for route {:?}", route_costs_in_usd, route);
+        info!("Route costs in USD: {:?}", route_costs_in_usd.len());
 
-        Ok(route_costs_in_usd.into_iter().min_by(|a, b| a.total_cmp(b)).unwrap())
+        let min_cost_route_and_fee =
+            route_costs_in_usd.into_iter().min_by(|a, b| a.1.total_cmp(&b.1));
+
+        return if let Some(min_cost_route_and_fee) = min_cost_route_and_fee {
+            Ok(min_cost_route_and_fee)
+        } else {
+            error!("No valid routes returned after applying min function");
+            Err(BungeeFetchRouteCostError::NoValidRouteError())
+        };
     }
 
-    async fn generate_route_calldata(
+    async fn generate_route_transactions(
         &self,
-        _: &Route<'_>,
-    ) -> Result<Calldata, Self::GenerateRouteCalldataError> {
-        todo!()
+        route: &Route,
+        amount: &U256,
+        sender_address: &String,
+        recipient_address: &String,
+    ) -> Result<
+        (Vec<EthereumTransaction>, Vec<RequiredApprovalDetails>),
+        Self::GenerateRouteTransactionsError,
+    > {
+        info!(
+            "Generating cheapest route transactions for route {:?} with amount {}",
+            route, amount
+        );
+
+        let (bungee_route, _) = self
+            .fetch_least_cost_route_and_cost_in_usd(
+                route,
+                amount,
+                Some(sender_address),
+                Some(recipient_address),
+                &CostType::Fee,
+            )
+            .await?;
+
+        info!("Retrieved bungee route {:?} for route {:?}", bungee_route, route);
+
+        let tx = self.build_tx(BuildTxRequest { route: bungee_route }).await?;
+        if !tx.success {
+            error!("Failure indicated in bungee response");
+
+            return Err(GenerateRouteTransactionsError::FetchRouteCostError(
+                BungeeFetchRouteCostError::FailureIndicatedInResponseError(),
+            ));
+        }
+
+        let tx = tx.result;
+        info!("Returned transaction from bungee {:?}", tx);
+
+        let transactions = vec![EthereumTransaction {
+            from: sender_address.clone(),
+            to: tx.tx_target,
+            value: Uint::from_str(&tx.value).map_err(|err| {
+                error!("Error while parsing tx data: {}", err);
+                GenerateRouteTransactionsError::InvalidU256Error(tx.value)
+            })?,
+            calldata: tx.tx_data,
+        }];
+
+        info!("Generated transactions {:?}", transactions);
+
+        let approvals = vec![RequiredApprovalDetails {
+            chain_id: tx.chain_id,
+            token_address: tx.approval_data.approval_token_address,
+            owner: tx.approval_data.owner,
+            target: tx.approval_data.allowance_target,
+            amount: Uint::from_str(&tx.approval_data.minimum_approval_amount).map_err(|err| {
+                error!("Error while parsing approval data: {}", err);
+                GenerateRouteTransactionsError::InvalidU256Error(
+                    tx.approval_data.minimum_approval_amount,
+                )
+            })?,
+        }];
+
+        info!("Generated approvals {:?}", approvals);
+
+        Ok((transactions, approvals))
     }
 }
 
@@ -162,12 +291,12 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::get_sample_config;
     use config::Config;
+    use config::get_sample_config;
 
+    use crate::{BungeeClient, CostType, Route};
     use crate::source::bungee::types::GetQuoteRequest;
     use crate::source::RouteSource;
-    use crate::{BungeeClient, CostType, Route};
 
     fn setup() -> (Config, BungeeClient) {
         let config = get_sample_config();
@@ -208,18 +337,41 @@ mod tests {
     async fn test_fetch_least_cost_route() {
         let (config, client) = setup();
 
-        let route = Route {
-            from_chain: &config.chains.get(&1).unwrap(),
-            to_chain: &config.chains.get(&42161).unwrap(),
-            from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            is_smart_contract_deposit: false,
-        };
-        let least_route_cost = client
-            .fetch_least_route_cost_in_usd(&route, Uint::from(100000000), &CostType::Fee)
+        let route =
+            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+                .unwrap();
+        let (_, least_route_cost) = client
+            .fetch_least_cost_route_and_cost_in_usd(
+                &route,
+                &Uint::from(100000000),
+                None,
+                None,
+                &CostType::Fee,
+            )
             .await
             .unwrap();
 
         assert_eq!(least_route_cost > 0.0, true);
+    }
+
+    #[tokio::test]
+    async fn test_generate_route_transactions() {
+        let (config, client) = setup();
+
+        let route =
+            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+                .unwrap();
+
+        let address = "0x90f05C1E52FAfB4577A4f5F869b804318d56A1ee".to_string();
+
+        let token_amount = Uint::from(100000000);
+        let result =
+            client.generate_route_transactions(&route, &token_amount, &address, &address).await;
+
+        assert!(result.is_ok());
+
+        let (transactions, approvals) = result.unwrap();
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(approvals.len(), 1);
     }
 }

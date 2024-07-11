@@ -1,17 +1,16 @@
 use std::error::Error;
 use std::fmt::Debug;
 
+use async_trait::async_trait;
+
 pub use coingecko::CoingeckoClient;
 
 mod coingecko;
 pub mod utils;
 
-pub trait TokenPriceProvider: Debug {
-    type Error: Error + Debug;
+#[async_trait]
+pub trait TokenPriceProvider: Debug + Send + Sync {
+    type Error: Error + Debug + Send + Sync;
 
-    fn get_token_price(
-        &self,
-        token_symbol: &String,
-    ) -> impl futures::Future<Output = Result<f64, Self::Error>>;
+    async fn get_token_price(&self, token_symbol: &String) -> Result<f64, Self::Error>;
 }
-

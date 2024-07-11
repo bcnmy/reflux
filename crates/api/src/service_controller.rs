@@ -1,63 +1,112 @@
-use account_aggregation::{service::AccountAggregationService, types};
-use axum::{extract::Query, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
-use routing_engine::engine::RoutingEngine;
-use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-pub struct ServiceController {
+use axum::{extract::Query, http::StatusCode, Json, response::IntoResponse, Router, routing::get};
+use serde_json::json;
+
+use account_aggregation::{service::AccountAggregationService, types};
+use routing_engine::routing_engine::RoutingEngine;
+use routing_engine::settlement_engine::SettlementEngine;
+use routing_engine::source::RouteSource;
+use routing_engine::token_price::TokenPriceProvider;
+
+pub struct ServiceController<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     account_service: Arc<AccountAggregationService>,
     routing_engine: Arc<RoutingEngine>,
+    settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
+    token_chain_map: HashMap<String, HashMap<u32, bool>>,
+    chain_supported: Vec<(u32, String)>,
+    token_supported: Vec<String>,
 }
 
-impl ServiceController {
+impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
+    ServiceController<Source, PriceProvider>
+{
     pub fn new(
-        account_service: AccountAggregationService,
+        account_service: Arc<AccountAggregationService>,
         routing_engine: Arc<RoutingEngine>,
+        settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
+        token_chain_map: HashMap<String, HashMap<u32, bool>>,
+        chain_supported: Vec<(u32, String)>,
+        token_supported: Vec<String>,
     ) -> Self {
-        Self { account_service: Arc::new(account_service), routing_engine }
+        Self {
+            account_service,
+            routing_engine,
+            settlement_engine,
+            token_chain_map,
+            chain_supported,
+            token_supported,
+        }
     }
 
-    pub fn router(self) -> Router {
-        let account_service = self.account_service.clone();
-        let routing_engine = self.routing_engine.clone();
-
+    pub fn router(&self) -> Router {
         Router::new()
-            .route("/", get(ServiceController::status))
-            .route("/api/health", get(ServiceController::status))
+            .route("/", get(|| async { Self::status().await }))
+            .route("/api/health", get(|| async { Self::status().await }))
             .route(
                 "/api/account",
                 get({
-                    let account_service = account_service.clone();
+                    // todo: @ankurdubey521 should we use path instead of query here?
+                    // move |Path(account): Path<String>| async move {
+                    //     ServiceController::get_account(account_service, account).await
+                    // }
+                    let account_service = self.account_service.clone();
                     move |Query(query): Query<types::UserAccountMappingQuery>| async move {
-                        ServiceController::get_account(account_service.clone(), query).await
+                        Self::get_account(account_service, query).await
                     }
                 }),
             )
             .route(
-                "/api/register_account",
+                "/api/account",
                 axum::routing::post({
-                    let account_service = account_service.clone();
+                    let account_service = self.account_service.clone();
                     move |Json(payload): Json<types::RegisterAccountPayload>| async move {
-                        ServiceController::register_user_account(account_service.clone(), payload)
-                            .await
+                        Self::register_user_account(account_service, payload).await
                     }
                 }),
             )
             .route(
-                "/api/add_account",
-                axum::routing::post({
-                    let account_service = account_service.clone();
+                "/api/account",
+                axum::routing::patch({
+                    let account_service = self.account_service.clone();
                     move |Json(payload): Json<types::AddAccountPayload>| async move {
-                        ServiceController::add_account(account_service.clone(), payload).await
+                        Self::add_account(account_service, payload).await
+                    }
+                }),
+            )
+            .route(
+                "/api/config",
+                get({
+                    let chain_supported = self.chain_supported.clone();
+                    let token_supported = self.token_supported.clone();
+                    move || async move { Self::get_config(chain_supported, token_supported) }
+                }),
+            )
+            .route(
+                "/api/balance",
+                get({
+                    let account_service = self.account_service.clone();
+                    move |Query(query): Query<types::UserAccountMappingQuery>| async move {
+                        Self::get_balance(account_service, query).await
                     }
                 }),
             )
             .route(
                 "/api/get_best_path",
                 get({
-                    let routing_engine = routing_engine.clone();
+                    let routing_engine = self.routing_engine.clone();
+                    let settlement_engine = self.settlement_engine.clone();
+                    let token_chain_map = self.token_chain_map.clone();
+
                     move |Query(query): Query<types::PathQuery>| async move {
-                        ServiceController::get_best_path(routing_engine.clone(), query).await
+                        Self::get_best_path(
+                            routing_engine,
+                            settlement_engine,
+                            token_chain_map,
+                            query,
+                        )
+                        .await
                     }
                 }),
             )
@@ -87,10 +136,7 @@ impl ServiceController {
                     (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
                 }
             },
-            Ok(None) => (
-                StatusCode::NOT_FOUND,
-                Json(json!({ "error": "User not found", "accounts": [query.account] })),
-            ),
+            Ok(None) => (StatusCode::NOT_FOUND, Json(json!({ "error": "User not found" }))),
             Err(err) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": err.to_string() })))
             }
@@ -131,17 +177,32 @@ impl ServiceController {
         }
     }
 
-    /// Get best cost path for asset consolidation
-    pub async fn get_best_path(
-        routing_engine: Arc<RoutingEngine>,
-        query: types::PathQuery,
+    /// Get all supported chains and tokens
+    pub fn get_config(
+        chain_supported: Vec<(u32, String)>,
+        token_supported: Vec<String>,
     ) -> impl IntoResponse {
-        match routing_engine
-            .get_best_cost_path(&query.account, query.to_chain, &query.to_token, query.to_value)
-            .await
-        {
-            Ok(routes) => {
-                let response = json!({ "routes": routes });
+        let response = json!({
+            "chains": chain_supported,
+            "tokens": token_supported
+        });
+        (StatusCode::OK, Json(response))
+    }
+
+    /// Get user account balance
+    pub async fn get_balance(
+        account_service: Arc<AccountAggregationService>,
+        query: types::UserAccountMappingQuery,
+    ) -> impl IntoResponse {
+        match account_service.get_user_accounts_balance(&query.account).await {
+            Ok(balances) => {
+                // for loop to add the balance in USD
+                let total_balance =
+                    balances.iter().fold(0.0, |acc, balance| acc + balance.amount_in_usd);
+                let response = json!({
+                    "total_balance": total_balance,
+                    "balances": balances
+                });
                 (StatusCode::OK, Json(response))
             }
             Err(err) => {
@@ -149,5 +210,53 @@ impl ServiceController {
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(response))
             }
         }
+    }
+
+    /// Get best cost path for asset consolidation
+    pub async fn get_best_path(
+        routing_engine: Arc<RoutingEngine>,
+        settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
+        token_chain_map: HashMap<String, HashMap<u32, bool>>,
+        query: types::PathQuery,
+    ) -> impl IntoResponse {
+        // Check for the supported chain and token
+        match token_chain_map.get(&query.to_token) {
+            Some(chain_supported) => match chain_supported.get(&query.to_chain) {
+                Some(supported) => {
+                    if !supported {
+                        let response = json!({ "error": "Token not supported on chain" });
+                        return (StatusCode::BAD_REQUEST, Json(response));
+                    }
+                }
+                None => {
+                    let response = json!({ "error": "Chain not supported for token" });
+                    return (StatusCode::BAD_REQUEST, Json(response));
+                }
+            },
+            None => {
+                let response = json!({ "error": "Token not supported" });
+                return (StatusCode::BAD_REQUEST, Json(response));
+            }
+        }
+
+        let routes_result = routing_engine
+            .get_best_cost_paths(&query.account, query.to_chain, &query.to_token, query.to_value)
+            .await;
+
+        if let Err(err) = routes_result {
+            let response = json!({ "error": err.to_string() });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+
+        let transactions_result =
+            settlement_engine.generate_transactions(routes_result.unwrap()).await;
+
+        if let Err(err) = transactions_result {
+            let response = json!({ "error": err.to_string() });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+
+        let response = json!({ "routes": transactions_result.unwrap() });
+        (StatusCode::OK, Json(response))
     }
 }

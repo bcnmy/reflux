@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use derive_more::Display;
 use mongodb::{
     bson::{self, doc, Document},
@@ -65,6 +66,7 @@ impl MongoDBClient {
     }
 }
 
+#[async_trait]
 impl DBProvider for MongoDBClient {
     type Error = DBError;
 

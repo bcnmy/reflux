@@ -1,18 +1,18 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct ApiResponse {
-    pub data: ApiData,
+pub struct CovalentApiResponse {
+    pub data: CovalentApiData,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct ApiData {
-    pub items: Vec<TokenData>,
+pub struct CovalentApiData {
+    pub items: Vec<CovalentTokenData>,
     pub chain_id: u32,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct TokenData {
+pub struct CovalentTokenData {
     pub contract_ticker_symbol: Option<String>,
     pub balance: Option<String>,
     pub quote: Option<f64>,
@@ -20,7 +20,8 @@ pub struct TokenData {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Balance {
+pub struct TokenWithBalance {
+    pub address: String,
     pub token: String,
     pub token_address: String,
     pub chain_id: u32,
@@ -35,12 +36,12 @@ pub struct User {
     pub accounts: Vec<Account>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Account {
-    pub chain_id: String,
-    pub is_enabled: bool,
-    pub account_address: String,
+    pub address: String,
     pub account_type: String,
+    pub is_enabled: bool,
+    pub tags: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -63,19 +64,13 @@ pub struct UserAccountMappingQuery {
 // Register Account Payload (same as Account)
 #[derive(Deserialize, Serialize, Debug)]
 pub struct RegisterAccountPayload {
-    pub account: String,
-    pub account_type: String,
-    pub chain_id: String,
-    pub is_enabled: bool,
+    pub accounts: Vec<Account>,
 }
 // Add Account Payload (need to add user_id)
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AddAccountPayload {
-    pub user_id: String,
-    pub account: String,
-    pub account_type: String,
-    pub chain_id: String,
-    pub is_enabled: bool,
+    pub user_id: Option<String>,
+    pub account: Vec<Account>
 }
 
 // Path Query Model

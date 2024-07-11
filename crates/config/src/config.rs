@@ -1,36 +1,37 @@
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
+use std::sync::Arc;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
 pub struct Config {
     // A bucket is defined for a pair of (source chain, source token) and (destination chain, destination token)
     // in which the estimation algorithm will be applied.
-    pub buckets: Vec<BucketConfig>,
+    pub buckets: Vec<Arc<BucketConfig>>,
     // List of all chains and their configurations.
-    pub chains: HashMap<u32, ChainConfig>,
+    pub chains: HashMap<u32, Arc<ChainConfig>>,
     // List of all tokens and their configurations.
-    pub tokens: HashMap<String, TokenConfig>,
+    pub tokens: HashMap<String, Arc<TokenConfig>>,
     // Bungee API configuration
-    pub bungee: BungeeConfig,
+    pub bungee: Arc<BungeeConfig>,
     // CoinGecko API configuration
-    pub coingecko: CoinGeckoConfig,
+    pub coingecko: Arc<CoinGeckoConfig>,
     // Covalent API configuration
-    pub covalent: CovalentConfig,
+    pub covalent: Arc<CovalentConfig>,
     // Infra Dependencies
-    pub infra: InfraConfig,
+    pub infra: Arc<InfraConfig>,
     // API Server Configuration
-    pub server: ServerConfig,
+    pub server: Arc<ServerConfig>,
     // Configuration for the indexer
-    pub indexer_config: IndexerConfig,
+    pub indexer_config: Arc<IndexerConfig>,
     // Configuration for the solver
-    pub solver_config: SolverConfig,
+    pub solver_config: Arc<SolverConfig>,
 }
 
 impl Config {
@@ -43,14 +44,14 @@ impl Config {
         let raw_config = RawConfig::from_yaml_str(s)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
-            chains.insert(chain.id, chain);
+            chains.insert(chain.id, Arc::new(chain));
         }
 
         let mut tokens = HashMap::new();
 
         fn verify_chain(
             chain_id: u32,
-            chains: &HashMap<u32, ChainConfig>,
+            chains: &HashMap<u32, Arc<ChainConfig>>,
         ) -> Result<(), ConfigError> {
             if let Some(chain) = chains.get(&chain_id) {
                 if !chain.is_enabled {
@@ -65,7 +66,7 @@ impl Config {
         fn verify_token(
             token_symbol: &str,
             chain_id: u32,
-            tokens: &HashMap<String, TokenConfig>,
+            tokens: &HashMap<String, Arc<TokenConfig>>,
         ) -> Result<(), ConfigError> {
             if let Some(token) = tokens.get(token_symbol) {
                 if !token.is_enabled {
@@ -99,7 +100,7 @@ impl Config {
                 }
             }
 
-            tokens.insert(token.symbol.clone(), token);
+            tokens.insert(token.symbol.clone(), Arc::new(token));
         }
 
         // Validate chains and tokens in the bucket configuration
@@ -121,14 +122,14 @@ impl Config {
         Ok(Config {
             chains,
             tokens,
-            buckets: raw_config.buckets.0,
-            covalent: raw_config.covalent,
-            bungee: raw_config.bungee,
-            coingecko: raw_config.coingecko,
-            infra: raw_config.infra,
-            server: raw_config.server,
-            indexer_config: raw_config.indexer_config,
-            solver_config: raw_config.solver_config,
+            buckets: raw_config.buckets.0.into_iter().map(Arc::new).collect(),
+            covalent: Arc::new(raw_config.covalent),
+            bungee: Arc::new(raw_config.bungee),
+            coingecko: Arc::new(raw_config.coingecko),
+            infra: Arc::new(raw_config.infra),
+            server: Arc::new(raw_config.server),
+            indexer_config: Arc::new(raw_config.indexer_config),
+            solver_config: Arc::new(raw_config.solver_config),
         })
     }
 }
@@ -248,7 +249,7 @@ pub struct BucketConfig {
     // The destination token
     #[validate(min_length = 1)]
     pub to_token: String,
-    // Whether the bucket should only index routes that support smart contracts or just EOAs
+    // Whether the bucket should only index routes that support smart blockchain or just EOAs
     pub is_smart_contract_deposit_supported: bool,
     // Lower bound of the token amount to be transferred from the source chain to the destination chain
     #[validate(minimum = 1.0)]
@@ -298,7 +299,7 @@ impl PartialEq<Self> for BucketConfig {
 
 impl Eq for BucketConfig {}
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainConfig {
     // The chain id
     #[validate(minimum = 1)]
@@ -311,9 +312,14 @@ pub struct ChainConfig {
     // The name of the chain in Covalent API
     #[validate(min_length = 1)]
     pub covalent_name: String,
+    // The RPC URL of the chain
+    #[validate(
+        pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    )]
+    pub rpc_url: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct TokenConfig {
     // The token symbol
     #[validate(min_length = 1)]
@@ -328,8 +334,8 @@ pub struct TokenConfig {
     pub by_chain: TokenConfigByChainConfigs,
 }
 
-#[derive(Debug, Deserialize, Validate, Into, From)]
-pub struct TokenConfigByChainConfigs(HashMap<u32, ChainSpecificTokenConfig>);
+#[derive(Debug, Deserialize, Validate, Into, From, Clone)]
+pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
 
 impl ValidateUniqueItems for TokenConfigByChainConfigs {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
@@ -345,7 +351,7 @@ impl Deref for TokenConfigByChainConfigs {
     }
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainSpecificTokenConfig {
     // The number of decimals the token has
     #[validate(minimum = 1)]
@@ -433,7 +439,7 @@ pub struct IndexerConfig {
     pub points_per_bucket: u64,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, Clone)]
 pub struct SolverConfig {
     #[validate(minimum = 1.0)]
     pub x_value: f64,
@@ -463,10 +469,12 @@ chains:
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
+    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
   - id: 1
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
+    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
 tokens:
 buckets:
 bungee:
