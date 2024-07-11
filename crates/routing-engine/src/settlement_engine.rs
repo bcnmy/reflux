@@ -7,7 +7,6 @@ use alloy::transports::http::Http;
 use futures::StreamExt;
 use log::{error, info};
 use reqwest::{Client, Url};
-use ruint::aliases::U256;
 use ruint::Uint;
 use serde::Serialize;
 use thiserror::Error;
@@ -72,31 +71,28 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
             .map(|route| async move {
                 info!("Generating transactions for route: {:?}", route.route);
 
-                // let token_amount = get_token_amount_from_value_in_usd(
-                //     &self.config,
-                //     &self.price_provider,
-                //     &route.route.from_token.symbol,
-                //     route.route.from_chain.id,
-                //     &route.source_amount_in_usd,
-                // )
-                // .await
-                // .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
-                let token_amount: U256 = Uint::from(100);
+                let token_amount = get_token_amount_from_value_in_usd(
+                    &self.config,
+                    &self.price_provider,
+                    &route.route.from_token.symbol,
+                    route.route.from_chain.id,
+                    &route.source_amount_in_usd,
+                )
+                .await
+                .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
 
                 info!("Token amount: {:?} for route {:?}", token_amount, route);
 
-                // let (ethereum_transactions, required_approval_details) = self
-                //     .source
-                //     .generate_route_transactions(
-                //         &route.route,
-                //         &token_amount,
-                //         &route.from_address,
-                //         &route.to_address,
-                //     )
-                //     .await
-                //     .map_err(|err| SettlementEngineErrors::GenerateTransactionsError(err))?;
-                let ethereum_transactions = Vec::new();
-                let required_approval_details = Vec::new();
+                let (ethereum_transactions, required_approval_details) = self
+                    .source
+                    .generate_route_transactions(
+                        &route.route,
+                        &token_amount,
+                        &route.from_address,
+                        &route.to_address,
+                    )
+                    .await
+                    .map_err(|err| SettlementEngineErrors::GenerateTransactionsError(err))?;
 
                 info!("Generated transactions: {:?} for route {:?}", ethereum_transactions, route);
 
@@ -392,6 +388,7 @@ mod tests {
     use std::time::Duration;
 
     use alloy::primitives::U256;
+    use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
 
@@ -412,6 +409,7 @@ mod tests {
         map: Mutex<HashMap<String, String>>,
     }
 
+    #[async_trait]
     impl KeyValueStore for KVStore {
         type Error = Err;
 
@@ -750,5 +748,12 @@ mod tests {
         assert_is_send::<EthereumTransaction>();
         assert_is_send::<RequiredApprovalDetails>();
         assert_is_send::<SettlementEngineErrors<BungeeClient, CoingeckoClient<KVStore>>>();
+        assert_is_send::<U256>();
+        assert_is_send::<
+            Result<
+                (Vec<EthereumTransaction>, Vec<RequiredApprovalDetails>),
+                SettlementEngineErrors<BungeeClient, CoingeckoClient<KVStore>>,
+            >,
+        >()
     }
 }

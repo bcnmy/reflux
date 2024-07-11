@@ -308,6 +308,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
 
@@ -324,6 +325,8 @@ mod tests {
 
     #[derive(Debug)]
     struct ModelStoreStub;
+
+    #[async_trait]
     impl KeyValueStore for ModelStoreStub {
         type Error = Err;
 
@@ -354,6 +357,8 @@ mod tests {
 
     #[derive(Debug)]
     struct ProducerStub;
+
+    #[async_trait]
     impl MessageQueue for ProducerStub {
         type Error = Err;
 
@@ -372,6 +377,8 @@ mod tests {
 
     #[derive(Debug)]
     struct TokenPriceProviderStub;
+
+    #[async_trait]
     impl TokenPriceProvider for TokenPriceProviderStub {
         type Error = Error;
 

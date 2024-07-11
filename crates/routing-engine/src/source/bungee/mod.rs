@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use async_trait::async_trait;
 use log::{error, info};
 use reqwest;
 use reqwest::header;
@@ -106,6 +107,7 @@ pub enum GenerateRouteTransactionsError {
     InvalidU256Error(String),
 }
 
+#[async_trait]
 impl RouteSource for BungeeClient {
     type FetchRouteCostError = BungeeFetchRouteCostError;
 

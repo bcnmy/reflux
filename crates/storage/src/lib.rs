@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
-use std::future;
 use std::time::Duration;
 
 pub use ::redis::{ControlFlow, Msg};
+use async_trait::async_trait;
 use mongodb::bson::Document;
 
 pub use redis_client::{RedisClient, RedisClientError};
@@ -13,43 +13,28 @@ pub mod mongodb_client;
 
 mod redis_client;
 
+#[async_trait]
 pub trait KeyValueStore: Debug + Send + Sync {
     type Error: Error + Debug + Send + Sync;
 
-    fn get(&self, k: &String) -> impl future::Future<Output = Result<String, Self::Error>>;
+    async fn get(&self, k: &String) -> Result<String, Self::Error>;
 
-    fn get_multiple(
-        &self,
-        k: &Vec<String>,
-    ) -> impl future::Future<Output = Result<Vec<String>, Self::Error>>;
+    async fn get_multiple(&self, k: &Vec<String>) -> Result<Vec<String>, Self::Error>;
 
-    fn set(
-        &self,
-        k: &String,
-        v: &String,
-        expiry: Duration,
-    ) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn set(&self, k: &String, v: &String, expiry: Duration) -> Result<(), Self::Error>;
 
-    fn set_multiple(
-        &self,
-        kv: &Vec<(String, String)>,
-    ) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn set_multiple(&self, kv: &Vec<(String, String)>) -> Result<(), Self::Error>;
 
-    fn get_all_keys(&self) -> impl future::Future<Output = Result<Vec<String>, RedisClientError>>;
+    async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError>;
 
-    fn get_all_key_values(
-        &self,
-    ) -> impl future::Future<Output = Result<HashMap<String, String>, RedisClientError>>;
+    async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError>;
 }
 
-pub trait MessageQueue: Debug {
-    type Error: Error + Debug;
+#[async_trait]
+pub trait MessageQueue: Debug + Send + Sync {
+    type Error: Error + Debug + Send + Sync;
 
-    fn publish(
-        &self,
-        topic: &str,
-        message: &str,
-    ) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn publish(&self, topic: &str, message: &str) -> Result<(), Self::Error>;
 
     fn subscribe<U>(
         &self,
@@ -58,21 +43,15 @@ pub trait MessageQueue: Debug {
     ) -> Result<(), Self::Error>;
 }
 
-pub trait DBProvider: Debug {
-    type Error: Error + Debug;
+#[async_trait]
+pub trait DBProvider: Debug + Send + Sync {
+    type Error: Error + Debug + Send + Sync;
 
-    fn create(&self, item: &Document) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn create(&self, item: &Document) -> Result<(), Self::Error>;
 
-    fn read(
-        &self,
-        query: &Document,
-    ) -> impl future::Future<Output = Result<Option<Document>, Self::Error>>;
+    async fn read(&self, query: &Document) -> Result<Option<Document>, Self::Error>;
 
-    fn update(
-        &self,
-        query: &Document,
-        update: &Document,
-    ) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn update(&self, query: &Document, update: &Document) -> Result<(), Self::Error>;
 
-    fn delete(&self, query: &Document) -> impl future::Future<Output = Result<(), Self::Error>>;
+    async fn delete(&self, query: &Document) -> Result<(), Self::Error>;
 }

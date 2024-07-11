@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::num::ParseFloatError;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use derive_more::Display;
 use log::{error, info};
 use reqwest::{header, StatusCode};
@@ -70,6 +71,7 @@ impl<KVStore: KeyValueStore> CoingeckoClient<KVStore> {
     }
 }
 
+#[async_trait]
 impl<KVStore: KeyValueStore> TokenPriceProvider for CoingeckoClient<KVStore> {
     type Error = CoingeckoClientError<KVStore>;
 
@@ -140,6 +142,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
+    use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
 
@@ -157,6 +160,7 @@ mod tests {
         map: Mutex<HashMap<String, String>>,
     }
 
+    #[async_trait]
     impl KeyValueStore for KVStore {
         type Error = Err;
 

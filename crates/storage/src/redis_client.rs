@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use log::info;
 use redis::{self, aio, AsyncCommands, ControlFlow, Msg, PubSubCommands};
 use redis::RedisError;
@@ -22,6 +23,7 @@ impl RedisClient {
     }
 }
 
+#[async_trait]
 impl KeyValueStore for RedisClient {
     type Error = RedisClientError;
 
@@ -65,6 +67,7 @@ impl KeyValueStore for RedisClient {
     }
 }
 
+#[async_trait]
 impl MessageQueue for RedisClient {
     type Error = RedisClientError;
 

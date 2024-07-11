@@ -71,6 +71,7 @@ pub enum Errors<T: Debug + Send + Sync> {
 mod tests {
     use std::fmt::Error;
 
+    use async_trait::async_trait;
     use ruint::Uint;
 
     use config::{Config, get_sample_config};
@@ -84,6 +85,7 @@ mod tests {
     #[derive(Debug)]
     struct TokenPriceProviderStub;
 
+    #[async_trait]
     impl TokenPriceProvider for TokenPriceProviderStub {
         type Error = Error;
 
