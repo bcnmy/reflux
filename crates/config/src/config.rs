@@ -1,12 +1,13 @@
 use std::collections::HashMap;
+use std::env;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 use serde_valid::yaml::FromYamlStr;
+use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 
 // Config Type
 #[derive(Debug)]
@@ -44,7 +45,23 @@ impl Config {
         let raw_config = RawConfig::from_yaml_str(s)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
-            chains.insert(chain.id, Arc::new(chain));
+            let rpc_url = env::var(&chain.rpc_url_env_name);
+            if rpc_url.is_err() {
+                return Err(ConfigError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Environment variable {} not found", chain.rpc_url_env_name),
+                )));
+            }
+            chains.insert(
+                chain.id,
+                Arc::new(ChainConfig {
+                    id: chain.id,
+                    name: chain.name,
+                    is_enabled: chain.is_enabled,
+                    covalent_name: chain.covalent_name,
+                    rpc_url: rpc_url.unwrap(),
+                }),
+            );
         }
 
         let mut tokens = HashMap::new();
@@ -119,14 +136,65 @@ impl Config {
             }
         }
 
+        // Read Infra Config from environment variables
+        let redis_url = env::var("REDIS_URL");
+        let mongo_url = env::var("MONGO_URL");
+        if redis_url.is_err() {
+            return Err(ConfigError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Environment variable REDIS_URL not found",
+            )));
+        }
+        if mongo_url.is_err() {
+            return Err(ConfigError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Environment variable MONGO_URL not found",
+            )));
+        }
+        let infra = InfraConfig { redis_url: redis_url.unwrap(), mongo_url: mongo_url.unwrap() };
+
+        // Read API keys from environment variables
+        let bungee_api_key = env::var("BUNGEE_API_KEY");
+        let covalent_api_key = env::var("COVALENT_API_KEY");
+        let coingecko_api_key = env::var("COINGECKO_API_KEY");
+        if bungee_api_key.is_err() {
+            return Err(ConfigError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Environment variable BUNGEE_API_KEY not found",
+            )));
+        }
+        if covalent_api_key.is_err() {
+            return Err(ConfigError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Environment variable COVALENT_API_KEY not found",
+            )));
+        }
+        if coingecko_api_key.is_err() {
+            return Err(ConfigError::IoError(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Environment variable COINGECKO_API_KEY not found",
+            )));
+        }
+        let bungee =
+            BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key.unwrap() };
+        let covalent = CovalentConfig {
+            base_url: raw_config.covalent.base_url,
+            api_key: covalent_api_key.unwrap(),
+        };
+        let coingecko = CoinGeckoConfig {
+            base_url: raw_config.coingecko.base_url,
+            api_key: coingecko_api_key.unwrap(),
+            expiry_sec: raw_config.coingecko.expiry_sec,
+        };
+
         Ok(Config {
             chains,
             tokens,
             buckets: raw_config.buckets.0.into_iter().map(Arc::new).collect(),
-            covalent: Arc::new(raw_config.covalent),
-            bungee: Arc::new(raw_config.bungee),
-            coingecko: Arc::new(raw_config.coingecko),
-            infra: Arc::new(raw_config.infra),
+            covalent: Arc::new(covalent),
+            bungee: Arc::new(bungee),
+            coingecko: Arc::new(coingecko),
+            infra: Arc::new(infra),
             server: Arc::new(raw_config.server),
             indexer_config: Arc::new(raw_config.indexer_config),
             solver_config: Arc::new(raw_config.solver_config),
@@ -223,13 +291,12 @@ pub struct RawConfig {
     #[validate(unique_items)]
     pub buckets: Buckets,
     #[validate(unique_items)]
-    pub chains: Chains,
+    pub chains: ChainsWithoutRpc,
     #[validate(unique_items)]
     pub tokens: TokenConfigs,
-    pub bungee: BungeeConfig,
-    pub coingecko: CoinGeckoConfig,
-    pub covalent: CovalentConfig,
-    pub infra: InfraConfig,
+    pub bungee: BungeeConfigWithoutApiKey,
+    pub coingecko: CoinGeckoConfigWithoutApiKey,
+    pub covalent: CovalentConfigWithoutApiKey,
     pub server: ServerConfig,
     pub indexer_config: IndexerConfig,
     pub solver_config: SolverConfig,
@@ -299,6 +366,31 @@ impl PartialEq<Self> for BucketConfig {
 
 impl Eq for BucketConfig {}
 
+#[derive(Debug, Deserialize, From, Into)]
+pub struct ChainsWithoutRpc(Vec<ChainConfigWithoutRpcUrl>);
+impl ValidateUniqueItems for ChainsWithoutRpc {
+    fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
+        self.0.iter().map(|c| c.id).collect::<Vec<_>>().validate_unique_items()
+    }
+}
+
+#[derive(Debug, Deserialize, Validate, Clone)]
+pub struct ChainConfigWithoutRpcUrl {
+    // The chain id
+    #[validate(minimum = 1)]
+    pub id: u32,
+    // The name of the chain
+    #[validate(min_length = 1)]
+    pub name: String,
+    // If the chain is enabled or now
+    pub is_enabled: bool,
+    // The name of the chain in Covalent API
+    #[validate(min_length = 1)]
+    pub covalent_name: String,
+    // Env variable name for the RPC URL
+    #[validate(min_length = 1)]
+    pub rpc_url_env_name: String,
+}
 #[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainConfig {
     // The chain id
@@ -365,6 +457,15 @@ pub struct ChainSpecificTokenConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+pub struct BungeeConfigWithoutApiKey {
+    // The base URL of the Bungee API
+    #[validate(
+        pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    )]
+    pub base_url: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
 pub struct BungeeConfig {
     // The base URL of the Bungee API
     #[validate(
@@ -377,20 +478,39 @@ pub struct BungeeConfig {
 }
 
 #[derive(Debug, Deserialize, Validate)]
+pub struct CoinGeckoConfigWithoutApiKey {
+    // The base URL of the CoinGecko API
+    #[validate(
+        pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    )]
+    pub base_url: String,
+    // The expiry time of the CoinGecko API key
+    #[validate(minimum = 1)]
+    pub expiry_sec: u64,
+}
+
+#[derive(Debug, Deserialize, Validate)]
 pub struct CoinGeckoConfig {
     // The base URL of the CoinGecko API
     #[validate(
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
-
-    // API key to access the CoinGecko API
+    // The API key to access the CoinGecko API
     #[validate(min_length = 1)]
     pub api_key: String,
-
     // The expiry time of the CoinGecko API key
     #[validate(minimum = 1)]
     pub expiry_sec: u64,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct CovalentConfigWithoutApiKey {
+    // The base URL of the CoinGecko API
+    #[validate(
+        pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
+    )]
+    pub base_url: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -400,8 +520,7 @@ pub struct CovalentConfig {
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
-
-    // The API key to access the Covalent API
+    // The API key to access the CoinGecko API
     #[validate(min_length = 1)]
     pub api_key: String,
 }
@@ -448,7 +567,7 @@ pub struct SolverConfig {
 }
 
 pub fn get_sample_config() -> Config {
-    Config::from_file("../../config.yaml.example").unwrap()
+    Config::from_file("../../config.yaml").unwrap()
 }
 
 #[cfg(test)]
@@ -470,26 +589,21 @@ chains:
     is_enabled: true
     covalent_name: eth-mainnet
     rpc_url: 'https://mainnet.infura.io/v3/1234567890'
+    rpc_url_env_name: ETHEREUM_RPC_URL
   - id: 1
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
-    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
+    rpc_url_env_name: ETHEREUM_RPC_URL
 tokens:
 buckets:
 bungee:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 covalent:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
-    api_key: 'my-api'
     expiry_sec: 5
-infra:
-    redis_url: 'redis://localhost:6379'
-    mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
     host: 'localhost'
@@ -523,6 +637,7 @@ tokens:
   - symbol: ETH
     is_enabled: true
     coingecko_symbol: ethereum
+    rpc_url_env_name: ETHEREUM_RPC_URL
     by_chain:
       1:
         is_enabled: true
@@ -547,17 +662,11 @@ tokens:
 buckets:
 bungee:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 covalent:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
-    api_key: 'my-api'
     expiry_sec: 5
-infra:
-    redis_url: 'redis://localhost:6379'
-    mongo_url: 'mongodb://localhost:27017'
 server:
     port: 8080
     host: 'localhost'

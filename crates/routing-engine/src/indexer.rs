@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use config::config::BucketConfig;
 
-use crate::{CostType, estimator, Route, RouteError, source, token_price};
+use crate::{estimator, source, token_price, CostType, Route, RouteError};
 
 const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
@@ -312,13 +312,13 @@ mod tests {
     use derive_more::Display;
     use thiserror::Error;
 
-    use config::{Config, get_sample_config};
+    use config::{get_sample_config, Config};
     use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg, RedisClientError};
 
-    use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
     use crate::token_price::TokenPriceProvider;
+    use crate::{BungeeClient, CostType};
 
     #[derive(Error, Display, Debug)]
     struct Err;
@@ -410,13 +410,13 @@ mod tests {
             }),
         ];
 
+        let api_key = env::var("BUNGEE_API_KEY").unwrap();
         config.bungee = Arc::new(config::BungeeConfig {
             base_url: config.bungee.base_url.clone(),
-            api_key: env::var("BUNGEE_API_KEY").unwrap(),
+            api_key: api_key.clone(),
         });
 
-        let bungee_client =
-            BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key).unwrap();
+        let bungee_client = BungeeClient::new(&config.bungee.base_url, &api_key).unwrap();
         let model_store = ModelStoreStub;
         let message_producer = ProducerStub;
         let token_price_provider = TokenPriceProviderStub;
