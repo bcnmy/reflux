@@ -19,7 +19,7 @@ pub struct ServiceController<Source: RouteSource, PriceProvider: TokenPriceProvi
     token_supported: Vec<String>,
 }
 
-impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
+impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
     ServiceController<Source, PriceProvider>
 {
     pub fn new(
@@ -219,46 +219,44 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
         token_chain_map: HashMap<String, HashMap<u32, bool>>,
         query: types::PathQuery,
     ) -> impl IntoResponse {
-        todo!()
+        // Check for the supported chain and token
+        match token_chain_map.get(&query.to_token) {
+            Some(chain_supported) => match chain_supported.get(&query.to_chain) {
+                Some(supported) => {
+                    if !supported {
+                        let response = json!({ "error": "Token not supported on chain" });
+                        return (StatusCode::BAD_REQUEST, Json(response));
+                    }
+                }
+                None => {
+                    let response = json!({ "error": "Chain not supported for token" });
+                    return (StatusCode::BAD_REQUEST, Json(response));
+                }
+            },
+            None => {
+                let response = json!({ "error": "Token not supported" });
+                return (StatusCode::BAD_REQUEST, Json(response));
+            }
+        }
 
-        // // Check for the supported chain and token
-        // match token_chain_map.get(&query.to_token) {
-        //     Some(chain_supported) => match chain_supported.get(&query.to_chain) {
-        //         Some(supported) => {
-        //             if !supported {
-        //                 let response = json!({ "error": "Token not supported on chain" });
-        //                 return (StatusCode::BAD_REQUEST, Json(response));
-        //             }
-        //         }
-        //         None => {
-        //             let response = json!({ "error": "Chain not supported for token" });
-        //             return (StatusCode::BAD_REQUEST, Json(response));
-        //         }
-        //     },
-        //     None => {
-        //         let response = json!({ "error": "Token not supported" });
-        //         return (StatusCode::BAD_REQUEST, Json(response));
-        //     }
-        // }
-        //
-        // let routes_result = routing_engine
-        //     .get_best_cost_paths(&query.account, query.to_chain, &query.to_token, query.to_value)
-        //     .await;
-        //
-        // if let Err(err) = routes_result {
-        //     let response = json!({ "error": err.to_string() });
-        //     return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
-        // }
-        //
-        // let transactions_result =
-        //     settlement_engine.generate_transactions(&routes_result.unwrap()).await;
-        //
-        // if let Err(err) = transactions_result {
-        //     let response = json!({ "error": err.to_string() });
-        //     return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
-        // }
-        //
-        // let response = json!({ "routes": transactions_result.unwrap() });
-        // (StatusCode::OK, Json(response))
+        let routes_result = routing_engine
+            .get_best_cost_paths(&query.account, query.to_chain, &query.to_token, query.to_value)
+            .await;
+
+        if let Err(err) = routes_result {
+            let response = json!({ "error": err.to_string() });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+
+        let transactions_result =
+            settlement_engine.generate_transactions(&routes_result.unwrap()).await;
+
+        if let Err(err) = transactions_result {
+            let response = json!({ "error": err.to_string() });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(response));
+        }
+
+        let response = json!({ "routes": transactions_result.unwrap() });
+        (StatusCode::OK, Json(response))
     }
 }
