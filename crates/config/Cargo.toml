@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+serde = { version = "1.0.203", features = ["derive"] }
+serde_valid = { version = "0.21.0", features = ["yaml"] }
+serde_yaml = "0.9.34+deprecated"
+regex = "1.10.5"
+derive_more = { version = "1.0.0-beta.6", features = ["from", "into", "display"] }
