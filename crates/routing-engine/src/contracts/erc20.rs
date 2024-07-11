@@ -1,5 +1,6 @@
 use alloy::sol;
 
+#[cfg(not(doctest))]
 sol! {
     // SPDX-License-Identifier: MIT
     pragma solidity ^0.8.20;
