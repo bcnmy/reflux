@@ -10,12 +10,12 @@ use tower_http::cors::{Any, CorsLayer};
 use account_aggregation::service::AccountAggregationService;
 use api::service_controller::ServiceController;
 use config::Config;
+use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use routing_engine::estimator::LinearRegressionEstimator;
 use routing_engine::routing_engine::RoutingEngine;
 use routing_engine::settlement_engine::{generate_erc20_instance_map, SettlementEngine};
-use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
-use storage::mongodb_client::MongoDBClient;
 use storage::{ControlFlow, MessageQueue, RedisClient};
+use storage::mongodb_client::MongoDBClient;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -82,7 +82,7 @@ async fn run_solver(config: Arc<Config>) {
     .expect("Failed to create MongoDB provider for account mappings");
 
     let (covalent_base_url, covalent_api_key) =
-        (config.covalent.base_url.clone(), config.api_keys.covalent.clone());
+        (config.covalent.base_url.clone(), config.covalent.api_key.clone());
 
     let networks: Vec<String> =
         config.chains.iter().map(|(_, chain)| chain.covalent_name.clone()).collect();
@@ -114,11 +114,11 @@ async fn run_solver(config: Arc<Config>) {
 
     // Initialize Settlement Engine and Dependencies
     let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
-    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.api_keys.bungee)
+    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
         .expect("Failed to Instantiate Bungee Client");
     let token_price_provider = CoingeckoClient::new(
         config.coingecko.base_url.clone(),
-        config.api_keys.coingecko.clone(),
+        config.coingecko.api_key.clone(),
         redis_client.clone(),
         Duration::from_secs(config.coingecko.expiry_sec),
     );
@@ -199,12 +199,12 @@ async fn run_indexer(config: Arc<Config>) {
         .await
         .expect("Failed to instantiate redis client");
 
-    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.api_keys.bungee)
+    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
         .expect("Failed to Instantiate Bungee Client");
 
     let token_price_provider = CoingeckoClient::new(
         config.coingecko.base_url.clone(),
-        config.api_keys.coingecko.clone(),
+        config.coingecko.api_key.clone(),
         redis_provider.clone(),
         Duration::from_secs(config.coingecko.expiry_sec),
     );

@@ -410,11 +410,13 @@ mod tests {
             }),
         ];
 
-        config.bungee = Arc::new(config::BungeeConfig { base_url: config.bungee.base_url.clone() });
         let api_key = env::var("BUNGEE_API_KEY").unwrap();
+        config.bungee = Arc::new(config::BungeeConfig {
+            base_url: config.bungee.base_url.clone(),
+            api_key: api_key.clone(),
+        });
 
-        let bungee_client =
-            BungeeClient::new(&config.bungee.base_url, &api_key).unwrap();
+        let bungee_client = BungeeClient::new(&config.bungee.base_url, &api_key).unwrap();
         let model_store = ModelStoreStub;
         let message_producer = ProducerStub;
         let token_price_provider = TokenPriceProviderStub;

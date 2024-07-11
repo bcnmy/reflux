@@ -3,12 +3,12 @@ chains:
     name: Ethereum
     is_enabled: true
     covalent_name: eth-mainnet
-    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
+    rpc_url_env_name: ETHEREUM_RPC_URL
   - id: 42161
     name: Arbitrum
     covalent_name: arbitrum-mainnet
     is_enabled: true
-    rpc_url: 'https://mainnet.infura.io/v3/1234567890'
+    rpc_url_env_name: ARBITRUM_RPC_URL
 tokens:
   - symbol: USDC
     is_enabled: true
@@ -65,10 +65,6 @@ covalent:
 coingecko:
   base_url: "https://api.coingecko.com/api/v3"
   expiry_sec: 300
-infra:
-  redis_url: "redis://localhost:6379"
-  rabbitmq_url: "amqp://localhost:5672"
-  mongo_url: "mongodb://127.0.0.1:27017"
 server:
   port: 8080
   host: "localhost"
