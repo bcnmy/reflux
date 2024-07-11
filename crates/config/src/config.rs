@@ -1,12 +1,13 @@
 use std::collections::HashMap;
+use std::env;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 use serde_valid::yaml::FromYamlStr;
+use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
 
 // Config Type
 #[derive(Debug)]
@@ -32,6 +33,8 @@ pub struct Config {
     pub indexer_config: Arc<IndexerConfig>,
     // Configuration for the solver
     pub solver_config: Arc<SolverConfig>,
+    // ApiKeys for external services
+    pub api_keys: ApiKeys,
 }
 
 impl Config {
@@ -119,6 +122,14 @@ impl Config {
             }
         }
 
+        // Fetch API keys from environment variables
+        let bungee_api_key =
+            env::var("BUNGEE_API_KEY").expect("BUNGEE_API_KEY environment variable not found");
+        let covalent_api_key =
+            env::var("COVALENT_API_KEY").expect("COVALENT_API_KEY environment variable not found");
+        let coingecko_api_key = env::var("COINGECKO_API_KEY")
+            .expect("COINGECKO_API_KEY environment variable not found");
+
         Ok(Config {
             chains,
             tokens,
@@ -130,6 +141,11 @@ impl Config {
             server: Arc::new(raw_config.server),
             indexer_config: Arc::new(raw_config.indexer_config),
             solver_config: Arc::new(raw_config.solver_config),
+            api_keys: ApiKeys {
+                bungee: bungee_api_key,
+                covalent: covalent_api_key,
+                coingecko: coingecko_api_key,
+            },
         })
     }
 }
@@ -371,9 +387,6 @@ pub struct BungeeConfig {
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
-    // The API key to access the Bungee API
-    #[validate(min_length = 1)]
-    pub api_key: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -383,10 +396,6 @@ pub struct CoinGeckoConfig {
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
-
-    // API key to access the CoinGecko API
-    #[validate(min_length = 1)]
-    pub api_key: String,
 
     // The expiry time of the CoinGecko API key
     #[validate(minimum = 1)]
@@ -400,10 +409,16 @@ pub struct CovalentConfig {
         pattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)"
     )]
     pub base_url: String,
+}
 
-    // The API key to access the Covalent API
+#[derive(Debug, Deserialize, Validate)]
+pub struct ApiKeys {
     #[validate(min_length = 1)]
-    pub api_key: String,
+    pub bungee: String,
+    #[validate(min_length = 1)]
+    pub covalent: String,
+    #[validate(min_length = 1)]
+    pub coingecko: String,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -479,13 +494,10 @@ tokens:
 buckets:
 bungee:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 covalent:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
-    api_key: 'my-api'
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
@@ -547,13 +559,10 @@ tokens:
 buckets:
 bungee:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 covalent:
     base_url: 'https://api.bungee.exchange'
-    api_key: 'my-api'
 coingecko:
     base_url: 'https://api.coingecko.com'
-    api_key: 'my-api'
     expiry_sec: 5
 infra:
     redis_url: 'redis://localhost:6379'
