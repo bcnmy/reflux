@@ -35,6 +35,13 @@ spec:
                 mountPath: /home/nonroot/reflux/config.yaml
                 subPath: config.yaml
           restartPolicy: {{ .Values.cronjob.restartPolicy }}
+          resources:
+            requests:
+              memory: {{ .Values.resource.requests.memory }}
+              cpu: {{ .Values.resource.requests.cpu }}
+            limits:
+              memory: {{ .Values.resource.limits.memory }}
+              cpu: {{ .Values.resource.limits.cpu }}
           volumes:
             - name: config-volume
               configMap:
