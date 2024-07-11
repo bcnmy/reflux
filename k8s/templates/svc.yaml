@@ -11,4 +11,3 @@ spec:
   ports:
     - port: 8090
       targetPort: {{ .Values.port }}
-  

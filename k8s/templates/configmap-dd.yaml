@@ -8,4 +8,4 @@ data:
 {{- range $key, $value := .Values.datadog.configs }}
   {{ $key }}: {{ $value | quote }}
 {{- end }}         
-{{- end }} 
+{{- end }}
