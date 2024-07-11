@@ -13,8 +13,8 @@ pub mod mongodb_client;
 
 mod redis_client;
 
-pub trait KeyValueStore: Debug {
-    type Error: Error + Debug;
+pub trait KeyValueStore: Debug + Send + Sync {
+    type Error: Error + Debug + Send + Sync;
 
     fn get(&self, k: &String) -> impl future::Future<Output = Result<String, Self::Error>>;
 

@@ -13,6 +13,7 @@ use config::Config;
 use routing_engine::{BungeeClient, CoingeckoClient, Indexer};
 use routing_engine::estimator::LinearRegressionEstimator;
 use routing_engine::routing_engine::RoutingEngine;
+use routing_engine::settlement_engine::{generate_erc20_instance_map, SettlementEngine};
 use storage::{ControlFlow, MessageQueue, RedisClient};
 use storage::mongodb_client::MongoDBClient;
 
@@ -48,7 +49,7 @@ async fn main() {
     }
 
     // Load configuration from yaml
-    let config = Config::from_file(&args.config).expect("Failed to load config file");
+    let config = Arc::new(Config::from_file(&args.config).expect("Failed to load config file"));
 
     if args.indexer {
         run_indexer(config).await;
@@ -57,7 +58,7 @@ async fn main() {
     }
 }
 
-async fn run_solver(config: Config) {
+async fn run_solver(config: Arc<Config>) {
     info!("Starting Reflux Server");
 
     let (app_host, app_port) = (config.server.host.clone(), config.server.port.clone());
@@ -87,13 +88,13 @@ async fn run_solver(config: Config) {
         config.chains.iter().map(|(_, chain)| chain.covalent_name.clone()).collect();
 
     // Initialize account aggregation service for api
-    let account_service = AccountAggregationService::new(
+    let account_service = Arc::new(AccountAggregationService::new(
         user_db_provider.clone(),
         account_mapping_db_provider.clone(),
         networks,
         covalent_base_url,
         covalent_api_key,
-    );
+    ));
 
     // Initialize routing engine
     let buckets = config.buckets.clone();
@@ -106,9 +107,26 @@ async fn run_solver(config: Config) {
         account_service.clone(),
         buckets,
         redis_client.clone(),
-        config.solver_config,
+        config.solver_config.clone(),
         chain_configs,
         token_configs,
+    ));
+
+    // Initialize Settlement Engine and Dependencies
+    let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
+    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
+        .expect("Failed to Instantiate Bungee Client");
+    let token_price_provider = CoingeckoClient::new(
+        config.coingecko.base_url.clone(),
+        config.coingecko.api_key.clone(),
+        redis_client.clone(),
+        Duration::from_secs(config.coingecko.expiry_sec),
+    );
+    let settlement_engine = Arc::new(SettlementEngine::new(
+        Arc::clone(&config),
+        bungee_client,
+        token_price_provider,
+        erc20_instance_map,
     ));
 
     // Subscribe to cache update messages
@@ -150,6 +168,7 @@ async fn run_solver(config: Config) {
     let service_controller = ServiceController::new(
         account_service,
         routing_engine,
+        settlement_engine,
         token_chain_map,
         chain_supported,
         token_supported,
@@ -171,7 +190,7 @@ async fn run_solver(config: Config) {
     info!("Server stopped.");
 }
 
-async fn run_indexer(config: Config) {
+async fn run_indexer(config: Arc<Config>) {
     info!("Configuring Indexer");
 
     let config = config;
@@ -192,11 +211,11 @@ async fn run_indexer(config: Config) {
 
     let indexer: Indexer<BungeeClient, RedisClient, RedisClient, CoingeckoClient<RedisClient>> =
         Indexer::new(
-            &config,
-            &bungee_client,
-            &redis_provider,
-            &redis_provider,
-            &token_price_provider,
+            config,
+            bungee_client,
+            redis_provider.clone(),
+            redis_provider.clone(),
+            token_price_provider,
         );
 
     match indexer.run::<LinearRegressionEstimator>().await {

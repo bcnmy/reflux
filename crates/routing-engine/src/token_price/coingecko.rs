@@ -134,10 +134,10 @@ struct CoinsIdResponseMarketDataCurrentPrice {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::env;
     use std::fmt::Debug;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use derive_more::Display;
@@ -154,14 +154,14 @@ mod tests {
 
     #[derive(Default, Debug)]
     struct KVStore {
-        map: RefCell<HashMap<String, String>>,
+        map: Mutex<HashMap<String, String>>,
     }
 
     impl KeyValueStore for KVStore {
         type Error = Err;
 
         async fn get(&self, k: &String) -> Result<String, Self::Error> {
-            match self.map.borrow().get(k) {
+            match self.map.lock().unwrap().get(k) {
                 Some(v) => Ok(v.clone()),
                 None => Result::Err(Err),
             }
@@ -173,7 +173,8 @@ mod tests {
 
         async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
             self.map
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
             Ok(())
         }
@@ -204,7 +205,7 @@ mod tests {
         let store = KVStore::default();
 
         let client = CoingeckoClient::new(
-            config.coingecko.base_url,
+            config.coingecko.base_url.clone(),
             api_key,
             store,
             Duration::from_secs(config.coingecko.expiry_sec),
@@ -223,7 +224,7 @@ mod tests {
         let store = KVStore::default();
 
         let client = CoingeckoClient::new(
-            config.coingecko.base_url,
+            config.coingecko.base_url.clone(),
             api_key,
             store,
             Duration::from_secs(config.coingecko.expiry_sec),

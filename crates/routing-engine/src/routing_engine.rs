@@ -38,23 +38,23 @@ pub enum RoutingEngineError {
 /// This struct is responsible for calculating the best cost path for a user
 #[derive(Debug)]
 pub struct RoutingEngine {
-    buckets: Vec<BucketConfig>,
-    aas_client: AccountAggregationService,
+    buckets: Vec<Arc<BucketConfig>>,
+    aas_client: Arc<AccountAggregationService>,
     cache: Arc<RwLock<HashMap<String, String>>>, // (hash(bucket), hash(estimator_value)
     redis_client: RedisClient,
-    estimates: SolverConfig,
-    chain_configs: HashMap<u32, ChainConfig>,
-    token_configs: HashMap<String, TokenConfig>,
+    estimates: Arc<SolverConfig>,
+    chain_configs: HashMap<u32, Arc<ChainConfig>>,
+    token_configs: HashMap<String, Arc<TokenConfig>>,
 }
 
 impl RoutingEngine {
     pub fn new(
-        aas_client: AccountAggregationService,
-        buckets: Vec<BucketConfig>,
+        aas_client: Arc<AccountAggregationService>,
+        buckets: Vec<Arc<BucketConfig>>,
         redis_client: RedisClient,
-        solver_config: SolverConfig,
-        chain_configs: HashMap<u32, ChainConfig>,
-        token_configs: HashMap<String, TokenConfig>,
+        solver_config: Arc<SolverConfig>,
+        chain_configs: HashMap<u32, Arc<ChainConfig>>,
+        token_configs: HashMap<String, Arc<TokenConfig>>,
     ) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
 
@@ -285,21 +285,21 @@ impl RoutingEngine {
         from_address: &str,
         to_address: &str,
     ) -> Result<BridgeResult, RoutingEngineError> {
-        let from_chain = self.chain_configs.get(&from_chain_id).ok_or_else(|| {
+        let from_chain = Arc::clone(self.chain_configs.get(&from_chain_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!(
                 "Chain config not found for ID {}",
                 from_chain_id
             ))
-        })?;
-        let to_chain = self.chain_configs.get(&to_chain_id).ok_or_else(|| {
+        })?);
+        let to_chain = Arc::clone(self.chain_configs.get(&to_chain_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!("Chain config not found for ID {}", to_chain_id))
-        })?;
-        let from_token = self.token_configs.get(from_token_id).ok_or_else(|| {
+        })?);
+        let from_token = Arc::clone(self.token_configs.get(from_token_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!("Token config not found for {}", from_token_id))
-        })?;
-        let to_token = self.token_configs.get(to_token_id).ok_or_else(|| {
+        })?);
+        let to_token = Arc::clone(self.token_configs.get(to_token_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!("Token config not found for {}", to_token_id))
-        })?;
+        })?);
 
         Ok(BridgeResult {
             route: Route { from_chain, to_chain, from_token, to_token, is_smart_contract_deposit },
@@ -333,7 +333,7 @@ mod tests {
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
         // Create dummy buckets
         let buckets = vec![
-            BucketConfig {
+            Arc::new(BucketConfig {
                 from_chain_id: 1,
                 to_chain_id: 2,
                 from_token: "USDC".to_string(),
@@ -341,8 +341,8 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 1.0,
                 token_amount_to_usd: 10.0,
-            },
-            BucketConfig {
+            }),
+            Arc::new(BucketConfig {
                 from_chain_id: 1,
                 to_chain_id: 2,
                 from_token: "USDC".to_string(),
@@ -350,7 +350,7 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 10.0,
                 token_amount_to_usd: 100.0,
-            },
+            }),
         ];
 
         // Create a dummy estimator and serialize it
@@ -377,16 +377,16 @@ mod tests {
         .await
         .unwrap();
 
-        let aas_client = AccountAggregationService::new(
+        let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
             user_db_provider.clone(),
             vec!["eth-mainnet".to_string()],
             "https://api.covalent.com".to_string(),
             "my-api".to_string(),
-        );
+        ));
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
-        let estimates = SolverConfig { x_value: 2.0, y_value: 1.0 };
+        let estimates = Arc::new(SolverConfig { x_value: 2.0, y_value: 1.0 });
         let chain_configs = HashMap::new();
         let token_configs = HashMap::new();
         let routing_engine = RoutingEngine {
@@ -426,16 +426,16 @@ mod tests {
         )
         .await
         .unwrap();
-        let aas_client = AccountAggregationService::new(
+        let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
             user_db_provider.clone(),
             vec!["bsc-mainnet".to_string()],
             "https://api.covalenthq.com".to_string(),
             api_key,
-        );
+        ));
 
         let buckets = vec![
-            BucketConfig {
+            Arc::new(BucketConfig {
                 from_chain_id: 56,
                 to_chain_id: 2,
                 from_token: "USDT".to_string(),
@@ -443,8 +443,8 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 0.0,
                 token_amount_to_usd: 5.0,
-            },
-            BucketConfig {
+            }),
+            Arc::new(BucketConfig {
                 from_chain_id: 56,
                 to_chain_id: 2,
                 from_token: "USDT".to_string(),
@@ -452,7 +452,7 @@ mod tests {
                 is_smart_contract_deposit_supported: false,
                 token_amount_from_usd: 5.0,
                 token_amount_to_usd: 100.0,
-            },
+            }),
         ];
         // Create a dummy estimator and serialize it
         let dummy_estimator = LinearRegressionEstimator::build(vec![
@@ -471,31 +471,31 @@ mod tests {
 
         let redis_client =
             storage::RedisClient::build(&"redis://localhost:6379".to_string()).await.unwrap();
-        let estimates = SolverConfig { x_value: 2.0, y_value: 1.0 };
-        let chain_config1 = ChainConfig {
+        let estimates = Arc::new(SolverConfig { x_value: 2.0, y_value: 1.0 });
+        let chain_config1 = Arc::new(ChainConfig {
             id: 56,
             name: "bsc-mainnet".to_string(),
             is_enabled: true,
             covalent_name: "bsc-mainnet".to_string(),
             rpc_url: "https://bsc-dataseed.binance.org".to_string(),
-        };
-        let chain_config2 = ChainConfig {
+        });
+        let chain_config2 = Arc::new(ChainConfig {
             id: 2,
             name: "eth-mainnet".to_string(),
             is_enabled: true,
             covalent_name: "ethereum".to_string(),
             rpc_url: "https://mainnet.infura.io/v3/".to_string(),
-        };
+        });
         let mut chain_configs = HashMap::new();
         chain_configs.insert(56, chain_config1);
         chain_configs.insert(2, chain_config2);
 
-        let token_config = TokenConfig {
+        let token_config = Arc::new(TokenConfig {
             symbol: "USDT".to_string(),
             coingecko_symbol: "USDT".to_string(),
             is_enabled: true,
             by_chain: TokenConfigByChainConfigs(HashMap::new()),
-        };
+        });
         let mut token_configs = HashMap::new();
         token_configs.insert("USDT".to_string(), token_config);
 

@@ -2,12 +2,13 @@ use std::error::Error;
 use std::fmt::Debug;
 
 use ruint::aliases::U256;
+use serde::Serialize;
 
 use crate::{CostType, Route};
 
 pub mod bungee;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct EthereumTransaction {
     pub from: String,
     pub to: String,
@@ -24,10 +25,10 @@ pub struct RequiredApprovalDetails {
     pub amount: U256,
 }
 
-pub trait RouteSource: Debug {
-    type FetchRouteCostError: Debug + Error;
-    type GenerateRouteTransactionsError: Debug + Error;
-    type BaseRouteType: Debug;
+pub trait RouteSource: Debug + Send + Sync {
+    type FetchRouteCostError: Debug + Error + Send + Sync;
+    type GenerateRouteTransactionsError: Debug + Error + Send + Sync;
+    type BaseRouteType: Debug + Send + Sync;
 
     fn fetch_least_cost_route_and_cost_in_usd(
         &self,

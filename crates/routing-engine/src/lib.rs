@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
+pub use alloy::providers::Provider;
+pub use alloy::transports::Transport;
 use derive_more::Display;
 use thiserror::Error;
 
-use config::config::{BucketConfig, ChainConfig, Config, TokenConfig};
+use config::{ChainConfig, TokenConfig};
+use config::config::{BucketConfig, Config};
 pub use indexer::Indexer;
 pub use source::bungee::BungeeClient;
 pub use token_price::CoingeckoClient;
@@ -9,11 +14,11 @@ pub use token_price::CoingeckoClient;
 pub mod routing_engine;
 pub mod token_price;
 
-mod contracts;
+pub mod blockchain;
 pub mod estimator;
 pub mod indexer;
-mod settlement_engine;
-mod source;
+pub mod settlement_engine;
+pub mod source;
 
 #[derive(Debug, Error, Display)]
 pub enum CostType {
@@ -22,23 +27,23 @@ pub enum CostType {
 }
 
 #[derive(Debug)]
-pub struct Route<'config> {
-    from_chain: &'config ChainConfig,
-    to_chain: &'config ChainConfig,
-    from_token: &'config TokenConfig,
-    to_token: &'config TokenConfig,
+pub struct Route {
+    from_chain: Arc<ChainConfig>,
+    to_chain: Arc<ChainConfig>,
+    from_token: Arc<TokenConfig>,
+    to_token: Arc<TokenConfig>,
     is_smart_contract_deposit: bool,
 }
 
-impl<'a> Route<'a> {
+impl Route {
     pub fn build(
-        config: &'a Config,
+        config: &Config,
         from_chain_id: &u32,
         to_chain_id: &u32,
         from_token_id: &String,
         to_token_id: &String,
         is_smart_contract_deposit: bool,
-    ) -> Result<Route<'a>, RouteError> {
+    ) -> Result<Route, RouteError> {
         let from_chain = config.chains.get(from_chain_id);
         if from_chain.is_none() {
             return Err(RouteError::ChainNotFoundError(*from_chain_id));
@@ -60,18 +65,15 @@ impl<'a> Route<'a> {
         }
 
         Ok(Route {
-            from_chain: from_chain.unwrap(),
-            to_chain: to_chain.unwrap(),
-            from_token: from_token.unwrap(),
-            to_token: to_token.unwrap(),
+            from_chain: Arc::clone(from_chain.unwrap()),
+            to_chain: Arc::clone(to_chain.unwrap()),
+            from_token: Arc::clone(from_token.unwrap()),
+            to_token: Arc::clone(to_token.unwrap()),
             is_smart_contract_deposit,
         })
     }
 
-    pub fn build_from_bucket(
-        bucket: &'a BucketConfig,
-        config: &'a Config,
-    ) -> Result<Route<'a>, RouteError> {
+    pub fn build_from_bucket(bucket: &BucketConfig, config: &Config) -> Result<Route, RouteError> {
         Self::build(
             config,
             &bucket.from_chain_id,
@@ -93,16 +95,16 @@ pub enum RouteError {
 }
 
 #[derive(Debug)]
-pub struct BridgeResult<'config> {
-    route: Route<'config>,
+pub struct BridgeResult {
+    route: Route,
     source_amount_in_usd: f64,
     from_address: String,
     to_address: String,
 }
 
-impl BridgeResult<'_> {
-    pub fn build<'config>(
-        config: &'config Config,
+impl BridgeResult {
+    pub fn build(
+        config: &Config,
         from_chain_id: &u32,
         to_chain_id: &u32,
         from_token_id: &String,
@@ -111,7 +113,7 @@ impl BridgeResult<'_> {
         source_amount_in_usd: f64,
         from_address: String,
         to_address: String,
-    ) -> Result<BridgeResult<'config>, RouteError> {
+    ) -> Result<BridgeResult, RouteError> {
         Ok(BridgeResult {
             route: Route::build(
                 config,
@@ -125,5 +127,47 @@ impl BridgeResult<'_> {
             from_address,
             to_address,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use config::get_sample_config;
+
+    fn assert_is_send(_: impl Send) {}
+
+    #[test]
+    fn test_route_must_be_send() {
+        let config = get_sample_config();
+        let route = super::Route::build(
+            &config,
+            &1,
+            &42161,
+            &"USDC".to_string(),
+            &"USDT".to_string(),
+            false,
+        )
+        .unwrap();
+
+        assert_is_send(route);
+    }
+
+    #[test]
+    fn test_bridge_result_must_be_send() {
+        let config = get_sample_config();
+        let bridge_result = super::BridgeResult::build(
+            &config,
+            &1,
+            &42161,
+            &"USDC".to_string(),
+            &"USDT".to_string(),
+            false,
+            100.0,
+            "0x123".to_string(),
+            "0x456".to_string(),
+        )
+        .unwrap();
+
+        assert_is_send(bridge_result);
     }
 }

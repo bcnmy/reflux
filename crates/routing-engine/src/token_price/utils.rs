@@ -1,14 +1,16 @@
+use std::fmt::Debug;
+
 use ruint;
 use ruint::aliases::U256;
 use ruint::Uint;
-use std::fmt::Debug;
 use thiserror::Error;
+
 use crate::token_price::TokenPriceProvider;
 
-pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
-    config: &'config config::Config,
-    token_price_provider: &'config T,
-    token_symbol: &'config String,
+pub async fn get_token_amount_from_value_in_usd<T: TokenPriceProvider>(
+    config: &config::Config,
+    token_price_provider: &T,
+    token_symbol: &String,
     chain_id: u32,
     value_in_usd: &f64,
 ) -> Result<U256, Errors<T::Error>> {
@@ -34,10 +36,10 @@ pub async fn get_token_amount_from_value_in_usd<'config, T: TokenPriceProvider>(
     Ok(token_amount_in_wei)
 }
 
-pub async fn get_token_price<'config, T: TokenPriceProvider>(
-    config: &'config config::Config,
-    token_price_provider: &'config T,
-    token_symbol: &'config String,
+pub async fn get_token_price<T: TokenPriceProvider>(
+    config: &config::Config,
+    token_price_provider: &T,
+    token_symbol: &String,
 ) -> Result<f64, Errors<T::Error>> {
     let token_config = config.tokens.get(token_symbol);
     if token_config.is_none() {
@@ -54,7 +56,7 @@ pub async fn get_token_price<'config, T: TokenPriceProvider>(
 }
 
 #[derive(Debug, Error)]
-pub enum Errors<T: Debug> {
+pub enum Errors<T: Debug + Send + Sync> {
     #[error("Token price provider error: {:?}", _0)]
     TokenPriceProviderError(#[from] T),
 
@@ -71,7 +73,7 @@ mod tests {
 
     use ruint::Uint;
 
-    use config::{get_sample_config, Config};
+    use config::{Config, get_sample_config};
 
     use crate::token_price::TokenPriceProvider;
 

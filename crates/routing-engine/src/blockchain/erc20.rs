@@ -5,7 +5,7 @@ sol! {
     // SPDX-License-Identifier: MIT
     pragma solidity ^0.8.20;
 
-    // node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol
+    // node_modules/@openzeppelin/blockchain/token/ERC20/IERC20.sol
 
     // OpenZeppelin Contracts (last updated v5.0.0) (token/ERC20/IERC20.sol)
 
@@ -85,7 +85,7 @@ sol! {
         function transferFrom(address from, address to, uint256 value) external returns (bool);
     }
 
-    // node_modules/@openzeppelin/contracts/interfaces/IERC20.sol
+    // node_modules/@openzeppelin/blockchain/interfaces/IERC20.sol
 
     // OpenZeppelin Contracts (last updated v5.0.0) (interfaces/IERC20.sol)
 }

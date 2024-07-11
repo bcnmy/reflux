@@ -21,10 +21,7 @@ pub struct BungeeClient {
 }
 
 impl BungeeClient {
-    pub fn new<'config>(
-        base_url: &'config String,
-        api_key: &'config String,
-    ) -> Result<Self, header::InvalidHeaderValue> {
+    pub fn new(base_url: &String, api_key: &String) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);
 
@@ -118,7 +115,7 @@ impl RouteSource for BungeeClient {
 
     async fn fetch_least_cost_route_and_cost_in_usd(
         &self,
-        route: &Route<'_>,
+        route: &Route,
         from_token_amount: &U256,
         sender_address: Option<&String>,
         recipient_address: Option<&String>,
@@ -218,7 +215,7 @@ impl RouteSource for BungeeClient {
 
     async fn generate_route_transactions(
         &self,
-        route: &Route<'_>,
+        route: &Route,
         amount: &U256,
         sender_address: &String,
         recipient_address: &String,
@@ -338,13 +335,9 @@ mod tests {
     async fn test_fetch_least_cost_route() {
         let (config, client) = setup();
 
-        let route = Route {
-            from_chain: &config.chains.get(&1).unwrap(),
-            to_chain: &config.chains.get(&42161).unwrap(),
-            from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            is_smart_contract_deposit: false,
-        };
+        let route =
+            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+                .unwrap();
         let (_, least_route_cost) = client
             .fetch_least_cost_route_and_cost_in_usd(
                 &route,
@@ -363,13 +356,9 @@ mod tests {
     async fn test_generate_route_transactions() {
         let (config, client) = setup();
 
-        let route = Route {
-            from_chain: &config.chains.get(&1).unwrap(),
-            to_chain: &config.chains.get(&42161).unwrap(),
-            from_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            to_token: &config.tokens.get(&"USDC".to_string()).unwrap(),
-            is_smart_contract_deposit: false,
-        };
+        let route =
+            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+                .unwrap();
 
         let address = "0x90f05C1E52FAfB4577A4f5F869b804318d56A1ee".to_string();
 

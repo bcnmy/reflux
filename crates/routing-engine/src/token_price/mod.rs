@@ -6,8 +6,8 @@ pub use coingecko::CoingeckoClient;
 mod coingecko;
 pub mod utils;
 
-pub trait TokenPriceProvider: Debug {
-    type Error: Error + Debug;
+pub trait TokenPriceProvider: Debug + Send + Sync {
+    type Error: Error + Debug + Send + Sync;
 
     fn get_token_price(
         &self,

@@ -1,45 +1,40 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use alloy::hex::FromHexError;
-use alloy::providers::Provider;
+use alloy::providers::{Provider, ProviderBuilder, RootProvider};
+use alloy::transports::http::Http;
 use alloy::transports::Transport;
 use futures::StreamExt;
 use log::{error, info};
+use reqwest::{Client, Url};
 use ruint::Uint;
+use serde::Serialize;
 use thiserror::Error;
 
 use config::Config;
 
-use crate::{BridgeResult, contracts};
+use crate::{blockchain, BridgeResult};
+use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 use crate::token_price::TokenPriceProvider;
 use crate::token_price::utils::{Errors, get_token_amount_from_value_in_usd};
 
-pub struct SettlementEngine<
-    'config,
-    'key,
-    Source: RouteSource,
-    PriceProvider: TokenPriceProvider,
-    Erc20Transport: Transport + Clone,
-    Erc20Provider: Provider<Erc20Transport>,
-> {
+pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     source: Source,
-    config: &'config Config,
+    config: Arc<Config>,
     price_provider: PriceProvider,
-    // (chain_id, token_address) -> Utils
-    erc20_instance_map: HashMap<
-        (u32, &'key String),
-        contracts::ERC20ContractInstance<Erc20Transport, Erc20Provider>,
-    >,
+    // (chain_id, token_address) -> contract
+    erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum TransactionType {
     Approval,
     Bungee,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct TransactionWithType {
     transaction: EthereumTransaction,
     transaction_type: TransactionType,
@@ -47,30 +42,21 @@ pub struct TransactionWithType {
 
 const GENERATE_TRANSACTIONS_CONCURRENCY: usize = 10;
 
-impl<
-        'config,
-        'key,
-        Source: RouteSource,
-        PriceProvider: TokenPriceProvider,
-        Erc20Transport: Transport + Clone,
-        Erc20Provider: Provider<Erc20Transport>,
-    > SettlementEngine<'config, 'key, Source, PriceProvider, Erc20Transport, Erc20Provider>
+impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
+    SettlementEngine<Source, PriceProvider>
 {
     pub fn new(
-        config: &'config Config,
+        config: Arc<Config>,
         source: Source,
         price_provider: PriceProvider,
-        erc20_instance_map: HashMap<
-            (u32, &'key String),
-            contracts::ERC20ContractInstance<Erc20Transport, Erc20Provider>,
-        >,
+        erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
     ) -> Self {
         SettlementEngine { source, config, price_provider, erc20_instance_map }
     }
 
-    async fn generate_transactions(
+    pub async fn generate_transactions(
         &self,
-        routes: &Vec<BridgeResult<'config>>,
+        routes: &Vec<BridgeResult>,
     ) -> Result<Vec<TransactionWithType>, SettlementEngineErrors<Source, PriceProvider>> {
         info!("Generating transactions for routes: {:?}", routes);
 
@@ -82,12 +68,12 @@ impl<
                 >,
             >,
             _,
-        ) = futures::stream::iter(routes.into_iter())
+        ) = futures::stream::iter(routes.iter())
             .map(|route| async move {
                 info!("Generating transactions for route: {:?}", route.route);
 
                 let token_amount = get_token_amount_from_value_in_usd(
-                    self.config,
+                    &self.config,
                     &self.price_provider,
                     &route.route.from_token.symbol,
                     route.route.from_chain.id,
@@ -168,9 +154,10 @@ impl<
     ) -> Result<Option<TransactionWithType>, SettlementEngineErrors<Source, PriceProvider>> {
         info!("Generating transaction for approval: {:?}", required_approval_details);
 
-        let token_instance = self
-            .erc20_instance_map
-            .get(&(required_approval_details.chain_id, &required_approval_details.token_address));
+        let token_instance = self.erc20_instance_map.get(&(
+            required_approval_details.chain_id,
+            required_approval_details.token_address.clone(),
+        ));
 
         if token_instance.is_none() {
             error!(
@@ -329,26 +316,89 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
     AlloyError(#[from] alloy::contract::Error),
 }
 
+pub fn generate_erc20_instance_map(
+    config: &Config,
+) -> Result<HashMap<(u32, String), blockchain::ERC20Contract>, Vec<GenerateERC20InstanceMapErrors>>
+{
+    let (result, failed): (Vec<_>, _) = config
+        .tokens
+        .iter()
+        .flat_map(|(_, token)| {
+            token
+                .by_chain
+                .iter()
+                .map(
+                    |(chain_id, chain_specific_config)| -> Result<
+                        ((u32, String), IERC20Instance<Http<Client>, RootProvider<Http<Client>>>),
+                        GenerateERC20InstanceMapErrors,
+                    > {
+                        let rpc_url = &config
+                            .chains
+                            .iter()
+                            .find(|(&id, _)| id == *chain_id)
+                            .ok_or(GenerateERC20InstanceMapErrors::ChainNoFound(*chain_id))?
+                            .1
+                            .rpc_url;
+
+                        let provider =
+                            ProviderBuilder::new().on_http(Url::parse(rpc_url.as_str()).map_err(
+                                |_| GenerateERC20InstanceMapErrors::InvalidRPCUrl(rpc_url.clone()),
+                            )?);
+
+                        let token_address =
+                            chain_specific_config.address.clone().parse().map_err(|err| {
+                                GenerateERC20InstanceMapErrors::InvalidAddressError(
+                                    chain_specific_config.address.clone(),
+                                    err,
+                                )
+                            })?;
+
+                        let token = blockchain::ERC20Contract::new(token_address, provider);
+
+                        Ok(((*chain_id, chain_specific_config.address.clone()), token))
+                    },
+                )
+                .collect::<Vec<_>>()
+        })
+        .partition(Result::is_ok);
+
+    if failed.len() != 0 {
+        return Err(failed.into_iter().map(Result::unwrap_err).collect());
+    }
+
+    Ok(result.into_iter().map(Result::unwrap).collect())
+}
+
+#[derive(Error, Debug)]
+pub enum GenerateERC20InstanceMapErrors {
+    #[error("Chain not found for id: {0}")]
+    ChainNoFound(u32),
+
+    #[error("Error parsing RPC URL: {0}")]
+    InvalidRPCUrl(String),
+
+    #[error("Error parsing address: {0}")]
+    InvalidAddressError(String, FromHexError),
+}
+
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
     use std::collections::HashMap;
     use std::env;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use alloy::primitives::U256;
-    use alloy::providers::{ProviderBuilder, RootProvider};
-    use alloy::transports::http::Http;
     use derive_more::Display;
-    use reqwest::{Client, Url};
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
     use storage::{KeyValueStore, RedisClientError};
 
     use crate::{BridgeResult, BungeeClient, CoingeckoClient};
-    use crate::contracts::ERC20ContractInstance;
-    use crate::settlement_engine::{SettlementEngine, TransactionType};
+    use crate::settlement_engine::{
+        generate_erc20_instance_map, SettlementEngine, TransactionType,
+    };
     use crate::source::RequiredApprovalDetails;
 
     #[derive(Error, Debug, Display)]
@@ -356,14 +406,14 @@ mod tests {
 
     #[derive(Default, Debug)]
     struct KVStore {
-        map: RefCell<HashMap<String, String>>,
+        map: Mutex<HashMap<String, String>>,
     }
 
     impl KeyValueStore for KVStore {
         type Error = Err;
 
         async fn get(&self, k: &String) -> Result<String, Self::Error> {
-            match self.map.borrow().get(k) {
+            match self.map.lock().unwrap().get(k) {
                 Some(v) => Ok(v.clone()),
                 None => Result::Err(Err),
             }
@@ -375,7 +425,8 @@ mod tests {
 
         async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
             self.map
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
             Ok(())
         }
@@ -397,16 +448,7 @@ mod tests {
         get_sample_config()
     }
 
-    fn setup<'config: 'key, 'key>(
-        config: &'config Config,
-    ) -> SettlementEngine<
-        'config,
-        'key,
-        BungeeClient,
-        CoingeckoClient<KVStore>,
-        Http<Client>,
-        RootProvider<Http<Client>>,
-    > {
+    fn setup(config: &Arc<Config>) -> SettlementEngine<BungeeClient, CoingeckoClient<KVStore>> {
         let bungee_client = BungeeClient::new(
             &"https://api.socket.tech/v2".to_string(),
             &env::var("BUNGEE_API_KEY").unwrap().to_string(),
@@ -420,41 +462,10 @@ mod tests {
             Duration::from_secs(config.coingecko.expiry_sec),
         );
 
-        let erc20_instance_map = config
-            .tokens
-            .iter()
-            .flat_map(|(_, token)| {
-                token
-                    .by_chain
-                    .iter()
-                    .map(|(chain_id, chain_specific_config)| {
-                        let rpc_url = &config
-                            .chains
-                            .iter()
-                            .find(|(&id, _)| id == *chain_id)
-                            .expect(format!("Chain not found for id: {}", chain_id).as_str())
-                            .1
-                            .rpc_url;
-
-                        let provider = ProviderBuilder::new().on_http(
-                            Url::parse(rpc_url.as_str())
-                                .expect(format!("Invalid RPC URL: {}", rpc_url).as_str()),
-                        );
-
-                        let token_address = chain_specific_config.address.clone().parse().expect(
-                            format!("Invalid address: {}", chain_specific_config.address).as_str(),
-                        );
-
-                        let token = ERC20ContractInstance::new(token_address, provider);
-
-                        ((*chain_id, &chain_specific_config.address), token)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
+        let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
 
         let settlement_engine =
-            SettlementEngine::new(&config, bungee_client, client, erc20_instance_map);
+            SettlementEngine::new(Arc::clone(config), bungee_client, client, erc20_instance_map);
 
         return settlement_engine;
     }
@@ -470,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_should_generate_required_approval_transaction() {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let required_approval_data = RequiredApprovalDetails {
@@ -494,7 +505,7 @@ mod tests {
             transaction.transaction.calldata,
             engine
                 .erc20_instance_map
-                .get(&(required_approval_data.chain_id, &required_approval_data.token_address))
+                .get(&(required_approval_data.chain_id, required_approval_data.token_address))
                 .expect("ERC20 Utils not found")
                 .approve(
                     TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
@@ -510,7 +521,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_should_take_existing_approval_into_consideration_while_building_approval_data() {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let required_approval_data = RequiredApprovalDetails {
@@ -534,7 +545,7 @@ mod tests {
             transaction.transaction.calldata,
             engine
                 .erc20_instance_map
-                .get(&(required_approval_data.chain_id, &required_approval_data.token_address))
+                .get(&(required_approval_data.chain_id, required_approval_data.token_address))
                 .expect("ERC20 Utils not found")
                 .approve(
                     TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
@@ -550,7 +561,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_should_generate_approvals_for_multiple_required_transactions() {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let required_approval_datas = vec![
@@ -583,7 +594,7 @@ mod tests {
                 .erc20_instance_map
                 .get(&(
                     required_approval_datas[0].chain_id,
-                    &required_approval_datas[0].token_address
+                    required_approval_datas[0].token_address.clone()
                 ))
                 .expect("ERC20 Utils not found")
                 .approve(
@@ -606,7 +617,7 @@ mod tests {
                 .erc20_instance_map
                 .get(&(
                     required_approval_datas[1].chain_id,
-                    &required_approval_datas[1].token_address
+                    required_approval_datas[1].token_address.clone()
                 ))
                 .expect("ERC20 Utils not found")
                 .approve(
@@ -624,7 +635,7 @@ mod tests {
     #[tokio::test]
     async fn test_should_merge_approvals_from_same_owner_to_same_spender_for_same_token_and_chain()
     {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let required_approval_datas = vec![
@@ -657,7 +668,7 @@ mod tests {
                 .erc20_instance_map
                 .get(&(
                     required_approval_datas[0].chain_id,
-                    &required_approval_datas[0].token_address
+                    required_approval_datas[0].token_address.clone()
                 ))
                 .expect("ERC20 Utils not found")
                 .approve(
@@ -674,7 +685,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_should_generate_transactions_for_bridging_routes() {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let bridge_result = BridgeResult::build(
@@ -702,7 +713,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_should_generate_transactions_for_swaps() {
-        let config = setup_config();
+        let config = Arc::new(setup_config());
         let engine = setup(&config);
 
         let bridge_result = BridgeResult::build(
