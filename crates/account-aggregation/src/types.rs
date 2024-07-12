@@ -70,7 +70,7 @@ pub struct RegisterAccountPayload {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AddAccountPayload {
     pub user_id: Option<String>,
-    pub account: Vec<Account>
+    pub account: Vec<Account>,
 }
 
 // Path Query Model
