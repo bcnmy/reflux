@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::num::ParseIntError;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -381,14 +382,43 @@ pub struct TokenConfig {
     pub by_chain: TokenConfigByChainConfigs,
 }
 
-#[derive(Debug, Deserialize, Validate, Into, From, Clone)]
-pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
+#[derive(Debug, Validate, Into, From, Deserialize, Clone)]
+pub struct TokenConfigByChainConfigsRaw(pub HashMap<String, ChainSpecificTokenConfig>);
+
+impl ValidateUniqueItems for TokenConfigByChainConfigsRaw {
+    fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
+        self.0.keys().cloned().collect::<Vec<_>>().validate_unique_items()
+    }
+}
+
+impl TryFrom<TokenConfigByChainConfigsRaw> for TokenConfigByChainConfigs {
+    type Error = ParseIntError;
+
+    fn try_from(value: TokenConfigByChainConfigsRaw) -> Result<Self, Self::Error> {
+        let key_values: Vec<_> = value.0.into_iter().map(|(k, v)| (k.parse::<u32>(), v)).collect();
+        let error = key_values.iter().find(|(k, _)| k.is_err());
+        if error.is_some() {
+            return Err(error.unwrap().0.clone().unwrap_err());
+        }
+
+        Ok(TokenConfigByChainConfigs(
+            key_values
+                .into_iter()
+                .map((|(k, v): (Result<_, _>, _)| (k.unwrap(), v)))
+                .collect::<HashMap<u32, ChainSpecificTokenConfig>>(),
+        ))
+    }
+}
 
 impl ValidateUniqueItems for TokenConfigByChainConfigs {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
-        self.keys().cloned().collect::<Vec<_>>().validate_unique_items()
+        self.0.keys().cloned().collect::<Vec<_>>().validate_unique_items()
     }
 }
+
+#[derive(Debug, Into, From, Clone, Deserialize)]
+#[serde(try_from = "TokenConfigByChainConfigsRaw")]
+pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
 
 impl Deref for TokenConfigByChainConfigs {
     type Target = HashMap<u32, ChainSpecificTokenConfig>;
@@ -594,11 +624,11 @@ tokens:
     coingecko_symbol: ethereum
     rpc_url_env_name: ETHEREUM_RPC_URL
     by_chain:
-      1:
+      "1":
         is_enabled: true
         decimals: 18
         address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-      56:
+      "56":
         is_enabled: true
         decimals: 18
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
@@ -606,11 +636,11 @@ tokens:
     is_enabled: true
     coingecko_symbol: ethereum
     by_chain:
-      1:
+      "1":
         is_enabled: true
         decimals: 18
         address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-      56:
+      "56":
         is_enabled: true
         decimals: 18
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
