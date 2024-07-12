@@ -1,6 +1,10 @@
+use std::num::NonZeroU32;
 use std::str::FromStr;
 
 use async_trait::async_trait;
+use governor::{Quota, RateLimiter};
+use governor::clock::DefaultClock;
+use governor::state::{InMemoryState, NotKeyed};
 use log::{error, info};
 use reqwest;
 use reqwest::header;
@@ -15,19 +19,26 @@ use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 
 mod types;
 
+const BUNGEE_API_RATE_LIMIT: u32 = 2;
+
 #[derive(Debug)]
 pub struct BungeeClient {
     client: reqwest::Client,
+    rate_limiter: RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
     base_url: String,
 }
 
 impl BungeeClient {
     pub fn new(base_url: &String, api_key: &String) -> Result<Self, header::InvalidHeaderValue> {
         let mut headers = header::HeaderMap::new();
+        let rate_limiter = RateLimiter::direct(Quota::per_second(
+            NonZeroU32::new(BUNGEE_API_RATE_LIMIT).expect("Invalid Bungee Rate Limit"),
+        ));
         headers.insert("API-KEY", header::HeaderValue::from_str(api_key)?);
 
         Ok(BungeeClient {
             client: reqwest::Client::builder().default_headers(headers).build().unwrap(),
+            rate_limiter,
             base_url: base_url.clone(),
         })
     }
@@ -37,6 +48,10 @@ impl BungeeClient {
         params: GetQuoteRequest,
     ) -> Result<BungeeResponse<GetQuoteResponse>, BungeeClientError> {
         info!("Fetching quote from bungee for {:?}", params);
+
+        info!("Waiting for rate limiter to be ready");
+        self.rate_limiter.until_ready().await;
+        info!("Rate limiter is ready");
 
         let response =
             self.client.get(self.base_url.to_owned() + "/quote").query(&params).send().await?;
@@ -50,6 +65,12 @@ impl BungeeClient {
         &self,
         params: BuildTxRequest,
     ) -> Result<BungeeResponse<BuildTxResponse>, BungeeClientError> {
+        info!("Building transaction from bungee for {:?}", params);
+
+        info!("Waiting for rate limiter to be ready");
+        self.rate_limiter.until_ready().await;
+        info!("Rate limiter is ready");
+
         let response =
             self.client.post(self.base_url.to_owned() + "/build-tx").json(&params).send().await?;
         let raw_text = response.text().await?;

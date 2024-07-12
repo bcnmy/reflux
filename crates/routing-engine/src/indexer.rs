@@ -11,7 +11,7 @@ use config::config::BucketConfig;
 
 use crate::{CostType, estimator, Route, RouteError, source, token_price};
 
-const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 3;
+const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 5;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
 
 pub struct Indexer<
