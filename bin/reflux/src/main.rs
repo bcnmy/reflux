@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use axum::http::Method;
 use clap::Parser;
+use dotenv::dotenv;
 use log::{debug, error, info};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -34,6 +35,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    dotenv().expect("Failed to read .env");
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
     let mut args = Args::parse();
@@ -49,7 +51,8 @@ async fn main() {
     }
 
     // Load configuration from yaml
-    let config = Arc::new(Config::from_file(&args.config).expect("Failed to load config file"));
+    let config =
+        Arc::new(Config::build_from_file(&args.config).expect("Failed to load config file"));
 
     if args.indexer {
         run_indexer(config).await;

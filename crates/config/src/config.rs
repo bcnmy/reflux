@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::env;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::num::ParseIntError;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -36,22 +37,17 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_file(file_path: &str) -> Result<Self, ConfigError> {
-        let config_file_content = std::fs::read_to_string(file_path)?;
-        Self::from_yaml_str(&config_file_content)
+    pub fn build_from_file(public_config_yaml_file: &str) -> Result<Self, ConfigError> {
+        let config_file_content = std::fs::read_to_string(public_config_yaml_file)?;
+        Self::build(&config_file_content)
     }
 
-    pub fn from_yaml_str(s: &str) -> Result<Self, ConfigError> {
-        let raw_config = RawConfig::from_yaml_str(s)?;
+    pub fn build(public_config_yaml_contents: &str) -> Result<Self, ConfigError> {
+        let raw_config = RawConfig::from_yaml_str(public_config_yaml_contents)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
-            let rpc_url = env::var(&chain.rpc_url_env_name);
-            if rpc_url.is_err() {
-                return Err(ConfigError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("Environment variable {} not found", chain.rpc_url_env_name),
-                )));
-            }
+            let rpc_url = env::var(&chain.rpc_url_env_name)
+                .map_err(|err| ConfigError::EnvVarNotFound(chain.rpc_url_env_name.clone(), err))?;
             chains.insert(
                 chain.id,
                 Arc::new(ChainConfig {
@@ -59,62 +55,17 @@ impl Config {
                     name: chain.name,
                     is_enabled: chain.is_enabled,
                     covalent_name: chain.covalent_name,
-                    rpc_url: rpc_url.unwrap(),
+                    rpc_url,
                 }),
             );
         }
 
         let mut tokens = HashMap::new();
 
-        fn verify_chain(
-            chain_id: u32,
-            chains: &HashMap<u32, Arc<ChainConfig>>,
-        ) -> Result<(), ConfigError> {
-            if let Some(chain) = chains.get(&chain_id) {
-                if !chain.is_enabled {
-                    return Err(ConfigError::ChainNotSupported(chain_id));
-                }
-            } else {
-                return Err(ConfigError::ChainNotFound(chain_id));
-            }
-            Ok(())
-        }
-
-        fn verify_token(
-            token_symbol: &str,
-            chain_id: u32,
-            tokens: &HashMap<String, Arc<TokenConfig>>,
-        ) -> Result<(), ConfigError> {
-            if let Some(token) = tokens.get(token_symbol) {
-                if !token.is_enabled {
-                    return Err(ConfigError::TokenNotSupported(token_symbol.to_string()));
-                }
-
-                if let Some(chain_config) = token.by_chain.get(&chain_id) {
-                    if !chain_config.is_enabled {
-                        return Err(ConfigError::TokenNotSupportedOnChain(
-                            token_symbol.to_string(),
-                            chain_id,
-                        ));
-                    }
-                } else {
-                    return Err(ConfigError::TokenNotFoundOnChain(
-                        token_symbol.to_string(),
-                        chain_id,
-                    ));
-                }
-            } else {
-                return Err(ConfigError::TokenNotFound(token_symbol.to_string()));
-            }
-            Ok(())
-        }
-
         // Validate chains in the token configuration
         for token in raw_config.tokens.0 {
             for (chain_id, _) in token.by_chain.iter() {
-                if let Err(e) = verify_chain(*chain_id, &chains) {
-                    return Err(e);
-                }
+                Self::verify_chain(*chain_id, &chains)?;
             }
 
             tokens.insert(token.symbol.clone(), Arc::new(token));
@@ -122,68 +73,33 @@ impl Config {
 
         // Validate chains and tokens in the bucket configuration
         for bucket in raw_config.buckets.0.iter() {
-            if let Err(e) = verify_chain(bucket.from_chain_id, &chains) {
-                return Err(e);
-            }
-            if let Err(e) = verify_chain(bucket.to_chain_id, &chains) {
-                return Err(e);
-            }
-            if let Err(e) = verify_token(&bucket.from_token, bucket.from_chain_id, &tokens) {
-                return Err(e);
-            }
-            if let Err(e) = verify_token(&bucket.to_token, bucket.to_chain_id, &tokens) {
-                return Err(e);
-            }
+            Self::verify_chain(bucket.from_chain_id, &chains)?;
+            Self::verify_chain(bucket.to_chain_id, &chains)?;
+            Self::verify_token(&bucket.from_token, bucket.from_chain_id, &tokens)?;
+            Self::verify_token(&bucket.to_token, bucket.to_chain_id, &tokens)?;
         }
 
         // Read Infra Config from environment variables
-        let redis_url = env::var("REDIS_URL");
-        let mongo_url = env::var("MONGO_URL");
-        if redis_url.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable REDIS_URL not found",
-            )));
-        }
-        if mongo_url.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable MONGO_URL not found",
-            )));
-        }
-        let infra = InfraConfig { redis_url: redis_url.unwrap(), mongo_url: mongo_url.unwrap() };
+        let redis_url = env::var("REDIS_URL")
+            .map_err(|err| ConfigError::EnvVarNotFound("REDIS_URL".to_string(), err))?;
+        let mongo_url = env::var("MONGO_URL")
+            .map_err(|err| ConfigError::EnvVarNotFound("MONGO_URL".to_string(), err))?;
+        let infra = InfraConfig { redis_url, mongo_url };
 
         // Read API keys from environment variables
-        let bungee_api_key = env::var("BUNGEE_API_KEY");
-        let covalent_api_key = env::var("COVALENT_API_KEY");
-        let coingecko_api_key = env::var("COINGECKO_API_KEY");
-        if bungee_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable BUNGEE_API_KEY not found",
-            )));
-        }
-        if covalent_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable COVALENT_API_KEY not found",
-            )));
-        }
-        if coingecko_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable COINGECKO_API_KEY not found",
-            )));
-        }
-        let bungee =
-            BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key.unwrap() };
-        let covalent = CovalentConfig {
-            base_url: raw_config.covalent.base_url,
-            api_key: covalent_api_key.unwrap(),
-        };
+        let bungee_api_key = env::var("BUNGEE_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("BUNGEE_API_KEY".to_string(), err))?;
+        let covalent_api_key = env::var("COVALENT_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("COVALENT_API_KEY".to_string(), err))?;
+        let coingecko_api_key = env::var("COINGECKO_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("COINGECKO_API_KEY".to_string(), err))?;
+
+        let bungee = BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key };
+        let covalent =
+            CovalentConfig { base_url: raw_config.covalent.base_url, api_key: covalent_api_key };
         let coingecko = CoinGeckoConfig {
             base_url: raw_config.coingecko.base_url,
-            api_key: coingecko_api_key.unwrap(),
+            api_key: coingecko_api_key,
             expiry_sec: raw_config.coingecko.expiry_sec,
         };
 
@@ -199,6 +115,43 @@ impl Config {
             indexer_config: Arc::new(raw_config.indexer_config),
             solver_config: Arc::new(raw_config.solver_config),
         })
+    }
+
+    fn verify_chain(
+        chain_id: u32,
+        chains: &HashMap<u32, Arc<ChainConfig>>,
+    ) -> Result<(), ConfigError> {
+        let chain = chains.get(&chain_id).ok_or(ConfigError::ChainNotFound(chain_id))?;
+
+        if !chain.is_enabled {
+            return Err(ConfigError::ChainNotSupported(chain_id));
+        }
+
+        Ok(())
+    }
+
+    fn verify_token(
+        token_symbol: &str,
+        chain_id: u32,
+        tokens: &HashMap<String, Arc<TokenConfig>>,
+    ) -> Result<(), ConfigError> {
+        let token =
+            tokens.get(token_symbol).ok_or(ConfigError::TokenNotFound(token_symbol.to_string()))?;
+
+        if !token.is_enabled {
+            return Err(ConfigError::TokenNotSupported(token_symbol.to_string()));
+        }
+
+        let chain = token
+            .by_chain
+            .get(&chain_id)
+            .ok_or(ConfigError::TokenNotFoundOnChain(token_symbol.to_string(), chain_id))?;
+
+        if !chain.is_enabled {
+            return Err(ConfigError::TokenNotSupportedOnChain(token_symbol.to_string(), chain_id));
+        }
+
+        Ok(())
     }
 }
 
@@ -233,6 +186,9 @@ pub enum ConfigError {
 
     #[display("Error Reading Config File: {}", _0)]
     IoError(std::io::Error),
+
+    #[display("Environment Variable Not Found: {}", _0)]
+    EnvVarNotFound(String, env::VarError),
 }
 
 // Intermediate Config Type as Deserialization Target
@@ -426,14 +382,43 @@ pub struct TokenConfig {
     pub by_chain: TokenConfigByChainConfigs,
 }
 
-#[derive(Debug, Deserialize, Validate, Into, From, Clone)]
-pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
+#[derive(Debug, Validate, Into, From, Deserialize, Clone)]
+pub struct TokenConfigByChainConfigsRaw(pub HashMap<String, ChainSpecificTokenConfig>);
+
+impl ValidateUniqueItems for TokenConfigByChainConfigsRaw {
+    fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
+        self.0.keys().cloned().collect::<Vec<_>>().validate_unique_items()
+    }
+}
+
+impl TryFrom<TokenConfigByChainConfigsRaw> for TokenConfigByChainConfigs {
+    type Error = ParseIntError;
+
+    fn try_from(value: TokenConfigByChainConfigsRaw) -> Result<Self, Self::Error> {
+        let key_values: Vec<_> = value.0.into_iter().map(|(k, v)| (k.parse::<u32>(), v)).collect();
+        let error = key_values.iter().find(|(k, _)| k.is_err());
+        if error.is_some() {
+            return Err(error.unwrap().0.clone().unwrap_err());
+        }
+
+        Ok(TokenConfigByChainConfigs(
+            key_values
+                .into_iter()
+                .map(|(k, v): (Result<_, _>, _)| (k.unwrap(), v))
+                .collect::<HashMap<u32, ChainSpecificTokenConfig>>(),
+        ))
+    }
+}
 
 impl ValidateUniqueItems for TokenConfigByChainConfigs {
     fn validate_unique_items(&self) -> Result<(), UniqueItemsError> {
-        self.keys().cloned().collect::<Vec<_>>().validate_unique_items()
+        self.0.keys().cloned().collect::<Vec<_>>().validate_unique_items()
     }
 }
+
+#[derive(Debug, Into, From, Clone, Deserialize)]
+#[serde(try_from = "TokenConfigByChainConfigsRaw")]
+pub struct TokenConfigByChainConfigs(pub HashMap<u32, ChainSpecificTokenConfig>);
 
 impl Deref for TokenConfigByChainConfigs {
     type Target = HashMap<u32, ChainSpecificTokenConfig>;
@@ -567,7 +552,7 @@ pub struct SolverConfig {
 }
 
 pub fn get_sample_config() -> Config {
-    Config::from_file("../../config.yaml").unwrap()
+    Config::build_from_file("../../config.yaml").unwrap()
 }
 
 #[cfg(test)]
@@ -617,7 +602,7 @@ solver_config:
   y_value: 1.0
 "#;
         assert_eq!(
-            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+            if let ConfigError::SerdeError(err) = Config::build(&config).unwrap_err() {
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"chains\":{\"errors\":[\"The items must be unique.\"]}}}";
 
@@ -639,11 +624,11 @@ tokens:
     coingecko_symbol: ethereum
     rpc_url_env_name: ETHEREUM_RPC_URL
     by_chain:
-      1:
+      "1":
         is_enabled: true
         decimals: 18
         address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-      56:
+      "56":
         is_enabled: true
         decimals: 18
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
@@ -651,11 +636,11 @@ tokens:
     is_enabled: true
     coingecko_symbol: ethereum
     by_chain:
-      1:
+      "1":
         is_enabled: true
         decimals: 18
         address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-      56:
+      "56":
         is_enabled: true
         decimals: 18
         address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8'
@@ -681,7 +666,7 @@ solver_config:
 "#;
 
         assert_eq!(
-            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+            if let ConfigError::SerdeError(err) = Config::build(&config).unwrap_err() {
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"tokens\":{\"errors\":[\"The items must be unique.\"]}}}";
 
