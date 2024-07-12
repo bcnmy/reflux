@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/acme-challenge-type: http01
+    ingress.kubernetes.io/force-ssl-redirect: "true"
+  labels:
+    {{- include "reflux.labels" . | nindent 4 }}
+  name: {{ .Values.name }}-ingress
+  namespace: {{ .Values.namespace }}
+spec:
+  ingressClassName: kong
+  rules:
+  - host: {{ .Values.ingress.host }}
+    http:
+      paths:
+      - backend:
+          service:
+            name: {{ .Values.name }}
+            port:
+              number: 8
+        path: /
+        pathType: ImplementationSpecific
+  tls:
+  - hosts:
+    - {{ .Values.ingress.host }}
+    secretName: {{ .Values.name }}-tls-cert
