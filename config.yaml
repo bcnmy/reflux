@@ -9,6 +9,16 @@ chains:
     covalent_name: arbitrum-mainnet
     is_enabled: true
     rpc_url_env_name: ARBITRUM_RPC_URL
+  - id: 10
+    name: Optimism
+    is_enabled: true
+    covalent_name: optimism-mainnet
+    rpc_url_env_name: OPTIMISM_RPC_URL
+  - id: 8453
+    name: Base
+    is_enabled: true
+    covalent_name: base-mainnet
+    rpc_url_env_name: BASE_RPC_URL
 tokens:
   - symbol: USDC
     is_enabled: true
@@ -22,6 +32,18 @@ tokens:
         is_enabled: true
         decimals: 6
         address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+  - symbol: USDT
+    is_enabled: true
+    coingecko_symbol: tether
+    by_chain:
+      1:
+        is_enabled: true
+        decimals: 6
+        address: '0xdac17f958d2ee523a2206206994597c13d831ec7'
+      42161:
+        is_enabled: true
+        decimals: 6
+        address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 buckets:
   - from_chain_id: 1
     to_chain_id: 42161

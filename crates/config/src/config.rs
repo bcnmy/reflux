@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use derive_more::{Display, From, Into};
 use serde::Deserialize;
-use serde_valid::yaml::FromYamlStr;
 use serde_valid::{UniqueItemsError, Validate, ValidateUniqueItems};
+use serde_valid::yaml::FromYamlStr;
 
 // Config Type
 #[derive(Debug)]
@@ -36,13 +36,13 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_file(file_path: &str) -> Result<Self, ConfigError> {
-        let config_file_content = std::fs::read_to_string(file_path)?;
-        Self::from_yaml_str(&config_file_content)
+    pub fn build_from_file(public_config_yaml_file: &str) -> Result<Self, ConfigError> {
+        let config_file_content = std::fs::read_to_string(public_config_yaml_file)?;
+        Self::build(&config_file_content)
     }
 
-    pub fn from_yaml_str(s: &str) -> Result<Self, ConfigError> {
-        let raw_config = RawConfig::from_yaml_str(s)?;
+    pub fn build(public_config_yaml_contents: &str) -> Result<Self, ConfigError> {
+        let raw_config = RawConfig::from_yaml_str(public_config_yaml_contents)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
             let rpc_url = env::var(&chain.rpc_url_env_name);
@@ -66,55 +66,10 @@ impl Config {
 
         let mut tokens = HashMap::new();
 
-        fn verify_chain(
-            chain_id: u32,
-            chains: &HashMap<u32, Arc<ChainConfig>>,
-        ) -> Result<(), ConfigError> {
-            if let Some(chain) = chains.get(&chain_id) {
-                if !chain.is_enabled {
-                    return Err(ConfigError::ChainNotSupported(chain_id));
-                }
-            } else {
-                return Err(ConfigError::ChainNotFound(chain_id));
-            }
-            Ok(())
-        }
-
-        fn verify_token(
-            token_symbol: &str,
-            chain_id: u32,
-            tokens: &HashMap<String, Arc<TokenConfig>>,
-        ) -> Result<(), ConfigError> {
-            if let Some(token) = tokens.get(token_symbol) {
-                if !token.is_enabled {
-                    return Err(ConfigError::TokenNotSupported(token_symbol.to_string()));
-                }
-
-                if let Some(chain_config) = token.by_chain.get(&chain_id) {
-                    if !chain_config.is_enabled {
-                        return Err(ConfigError::TokenNotSupportedOnChain(
-                            token_symbol.to_string(),
-                            chain_id,
-                        ));
-                    }
-                } else {
-                    return Err(ConfigError::TokenNotFoundOnChain(
-                        token_symbol.to_string(),
-                        chain_id,
-                    ));
-                }
-            } else {
-                return Err(ConfigError::TokenNotFound(token_symbol.to_string()));
-            }
-            Ok(())
-        }
-
         // Validate chains in the token configuration
         for token in raw_config.tokens.0 {
             for (chain_id, _) in token.by_chain.iter() {
-                if let Err(e) = verify_chain(*chain_id, &chains) {
-                    return Err(e);
-                }
+                Self::verify_chain(*chain_id, &chains)?;
             }
 
             tokens.insert(token.symbol.clone(), Arc::new(token));
@@ -122,68 +77,28 @@ impl Config {
 
         // Validate chains and tokens in the bucket configuration
         for bucket in raw_config.buckets.0.iter() {
-            if let Err(e) = verify_chain(bucket.from_chain_id, &chains) {
-                return Err(e);
-            }
-            if let Err(e) = verify_chain(bucket.to_chain_id, &chains) {
-                return Err(e);
-            }
-            if let Err(e) = verify_token(&bucket.from_token, bucket.from_chain_id, &tokens) {
-                return Err(e);
-            }
-            if let Err(e) = verify_token(&bucket.to_token, bucket.to_chain_id, &tokens) {
-                return Err(e);
-            }
+            Self::verify_chain(bucket.from_chain_id, &chains)?;
+            Self::verify_chain(bucket.to_chain_id, &chains)?;
+            Self::verify_token(&bucket.from_token, bucket.from_chain_id, &tokens)?;
+            Self::verify_token(&bucket.to_token, bucket.to_chain_id, &tokens)?;
         }
 
         // Read Infra Config from environment variables
-        let redis_url = env::var("REDIS_URL");
-        let mongo_url = env::var("MONGO_URL");
-        if redis_url.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable REDIS_URL not found",
-            )));
-        }
-        if mongo_url.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable MONGO_URL not found",
-            )));
-        }
-        let infra = InfraConfig { redis_url: redis_url.unwrap(), mongo_url: mongo_url.unwrap() };
+        let redis_url = env::var("REDIS_URL")?;
+        let mongo_url = env::var("MONGO_URL")?;
+        let infra = InfraConfig { redis_url, mongo_url };
 
         // Read API keys from environment variables
-        let bungee_api_key = env::var("BUNGEE_API_KEY");
-        let covalent_api_key = env::var("COVALENT_API_KEY");
-        let coingecko_api_key = env::var("COINGECKO_API_KEY");
-        if bungee_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable BUNGEE_API_KEY not found",
-            )));
-        }
-        if covalent_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable COVALENT_API_KEY not found",
-            )));
-        }
-        if coingecko_api_key.is_err() {
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Environment variable COINGECKO_API_KEY not found",
-            )));
-        }
-        let bungee =
-            BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key.unwrap() };
-        let covalent = CovalentConfig {
-            base_url: raw_config.covalent.base_url,
-            api_key: covalent_api_key.unwrap(),
-        };
+        let bungee_api_key = env::var("BUNGEE_API_KEY")?;
+        let covalent_api_key = env::var("COVALENT_API_KEY")?;
+        let coingecko_api_key = env::var("COINGECKO_API_KEY")?;
+
+        let bungee = BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key };
+        let covalent =
+            CovalentConfig { base_url: raw_config.covalent.base_url, api_key: covalent_api_key };
         let coingecko = CoinGeckoConfig {
             base_url: raw_config.coingecko.base_url,
-            api_key: coingecko_api_key.unwrap(),
+            api_key: coingecko_api_key,
             expiry_sec: raw_config.coingecko.expiry_sec,
         };
 
@@ -199,6 +114,43 @@ impl Config {
             indexer_config: Arc::new(raw_config.indexer_config),
             solver_config: Arc::new(raw_config.solver_config),
         })
+    }
+
+    fn verify_chain(
+        chain_id: u32,
+        chains: &HashMap<u32, Arc<ChainConfig>>,
+    ) -> Result<(), ConfigError> {
+        let chain = chains.get(&chain_id).ok_or(ConfigError::ChainNotFound(chain_id))?;
+
+        if !chain.is_enabled {
+            return Err(ConfigError::ChainNotSupported(chain_id));
+        }
+
+        Ok(())
+    }
+
+    fn verify_token(
+        token_symbol: &str,
+        chain_id: u32,
+        tokens: &HashMap<String, Arc<TokenConfig>>,
+    ) -> Result<(), ConfigError> {
+        let token =
+            tokens.get(token_symbol).ok_or(ConfigError::TokenNotFound(token_symbol.to_string()))?;
+
+        if !token.is_enabled {
+            return Err(ConfigError::TokenNotSupported(token_symbol.to_string()));
+        }
+
+        let chain = token
+            .by_chain
+            .get(&chain_id)
+            .ok_or(ConfigError::TokenNotFoundOnChain(token_symbol.to_string(), chain_id))?;
+
+        if !chain.is_enabled {
+            return Err(ConfigError::TokenNotSupportedOnChain(token_symbol.to_string(), chain_id));
+        }
+
+        Ok(())
     }
 }
 
@@ -233,6 +185,9 @@ pub enum ConfigError {
 
     #[display("Error Reading Config File: {}", _0)]
     IoError(std::io::Error),
+
+    #[display("Environment Variable Not Found: {}", _0)]
+    EnvVarNotFound(env::VarError),
 }
 
 // Intermediate Config Type as Deserialization Target
@@ -567,7 +522,7 @@ pub struct SolverConfig {
 }
 
 pub fn get_sample_config() -> Config {
-    Config::from_file("../../config.yaml").unwrap()
+    Config::build_from_file("../../config.yaml").unwrap()
 }
 
 #[cfg(test)]
@@ -617,7 +572,7 @@ solver_config:
   y_value: 1.0
 "#;
         assert_eq!(
-            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+            if let ConfigError::SerdeError(err) = Config::build(&config).unwrap_err() {
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"chains\":{\"errors\":[\"The items must be unique.\"]}}}";
 
@@ -681,7 +636,7 @@ solver_config:
 "#;
 
         assert_eq!(
-            if let ConfigError::SerdeError(err) = Config::from_yaml_str(&config).unwrap_err() {
+            if let ConfigError::SerdeError(err) = Config::build(&config).unwrap_err() {
                 let err = err.as_validation_errors().unwrap().to_string();
                 let expected_err = "{\"errors\":[],\"properties\":{\"tokens\":{\"errors\":[\"The items must be unique.\"]}}}";
 
