@@ -3,7 +3,7 @@ namespace: "reflux"
 image_name: "us-docker.pkg.dev/biconomy-prod/biconomy-prod/reflux"
 image_tag: "latest"
 imagePullPolicy: Always
-port: 8000
+port: 8080
 replica: 2
 
 resource:
@@ -14,6 +14,12 @@ resource:
     memory: 32Gi
     cpu: 8
 
+affinity:
+  affinityTolerations:
+    enable: true
+    key: "app"
+    values: "reflux"
+
 autoscale:
   enable: true
   minReplicas: 2
@@ -21,121 +27,123 @@ autoscale:
   targetCPUUtilizationPercentage: 80
 
 config:
-  ENV: "production"
-  config.toml: |
-      chains:
-        - id: 1
-          name: Ethereum
-          covalent_name: eth-mainnet
+  chains:
+    - id: 1
+      name: Ethereum
+      is_enabled: true
+      covalent_name: eth-mainnet
+      rpc_url_env_name: ETHEREUM_RPC_URL
+    - id: 42161
+      name: Arbitrum
+      covalent_name: arbitrum-mainnet
+      is_enabled: true
+      rpc_url_env_name: ARBITRUM_RPC_URL
+  tokens:
+    - symbol: USDC
+      is_enabled: true
+      coingecko_symbol: usd-coin
+      by_chain:
+        1:
           is_enabled: true
-        - id: 42161
-          name: Arbitrum
+          decimals: 6
+          address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        42161:
           is_enabled: true
-          covalent_name: bsc-mainnet
-      tokens:
-        - symbol: USDC
-          is_enabled: true
-          coingecko_symbol: usd-coin
-          by_chain:
-            1:
-              is_enabled: true
-              decimals: 6
-              address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-            42161:
-              is_enabled: true
-              decimals: 6
-              address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
-      buckets:
-        - from_chain_id: 1
-          to_chain_id: 42161
-          from_token: USDC
-          to_token: USDC
-          is_smart_contract_deposit_supported: false
-          token_amount_from_usd: 1
-          token_amount_to_usd: 10
-        - from_chain_id: 1
-          to_chain_id: 42161
-          from_token: USDC
-          to_token: USDC
-          is_smart_contract_deposit_supported: false
-          token_amount_from_usd: 10
-          token_amount_to_usd: 100
-        - from_chain_id: 1
-          to_chain_id: 42161
-          from_token: USDC
-          to_token: USDC
-          is_smart_contract_deposit_supported: false
-          token_amount_from_usd: 100
-          token_amount_to_usd: 1000
-        - from_chain_id: 1
-          to_chain_id: 42161
-          from_token: USDC
-          to_token: USDC
-          is_smart_contract_deposit_supported: false
-          token_amount_from_usd: 1000
-          token_amount_to_usd: 10000
-        - from_chain_id: 1
-          to_chain_id: 42161
-          from_token: USDC
-          to_token: USDC
-          is_smart_contract_deposit_supported: false
-          token_amount_from_usd: 10000
-          token_amount_to_usd: 100000
-      bungee:
-        base_url: https://api.socket.tech/v2
-      covalent:
-        base_url: ''
-      coingecko:
-        base_url: https://api.coingecko.com/api/v3
-        expiry_sec: 300
-      infra:
-        redis_url: redis://localhost:6379
-        mongo_url: mongodb://127.0.0.1:27017
-      server:
-        port: 8080
-        host: localhost
-      indexer_config:
-        indexer_update_topic: indexer_update
-        indexer_update_message: message
-        points_per_bucket: 3
-      solver_config:
-        x_value: 2.0
-        y_value: 1.0
+          decimals: 6
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+  buckets:
+    - from_chain_id: 1
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 1
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 1
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 1
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 1
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+  bungee:
+    base_url: https://api.socket.tech/v2
+  covalent:
+    base_url: "https://api.covalenthq.com"
+  coingecko:
+    base_url: "https://api.coingecko.com/api/v3"
+    expiry_sec: 300
+  server:
+    port: 8080
+    host: "localhost"
+  indexer_config:
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
+    points_per_bucket: 10
+  solver_config:
+    x_value: 2.0
+    y_value: 1.0
 
 secret:
   projectID: biconomy-prod
   key: reflux
   data:
-    TOKEN:
-      name: TOKEN
+    MONGO_URL:
+      name: MONGO_URL
       version: latest
-      property: TOKEN
+      property: MONGO_URL
+    REDIS_URL:
+      name: REDIS_URL
+      version: latest
+      property: REDIS_URL
+    COVALENT_API_KEY:
+      name: COVALENT_API_KEY
+      version: latest
+      property: COVALENT_API_KEY
+    BUNGEE_API_KEY:
+      name: BUNGEE_API_KEY
+      version: latest
+      property: BUNGEE_API_KEY
+    COINGECKO_API_KEY:
+      name: COINGECKO_API_KEY
+      version: latest
+      property: COINGECKO_API_KEY
+    ETHEREUM_RPC_URL:
+      name: ETHEREUM_RPC_URL
+      version: latest
+      property: ETHEREUM_RPC_URL
+    ARBITRUM_RPC_URL:
+      name: ARBITRUM_RPC_URL
+      version: latest
+      property: ARBITRUM_RPC_URL
 
 ingress:
   host: reflux.prod.biconomy.io
 
-probes:
-  healthEndpoint: /health
-  liveness:
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    timeoutSeconds: 5
-    successThreshold: 1
-    failureThreshold: 3
-  readiness:
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    timeoutSeconds: 5
-    successThreshold: 1
-    failureThreshold: 3
 
 cronjob:
   schedule: "0 */5 * * *"
-  command:
-    - reflux
-    - --indexer
-    - --config
-    -  /home/nonroot/reflux/config.toml
   restartPolicy: OnFailure
 
 

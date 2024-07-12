@@ -6,7 +6,5 @@ metadata:
   labels:
     {{- include "reflux.labels" . | nindent 4 }}
 data:
-{{- range $key, $value := .Values.config }}
-  {{ $key }}: |
-    {{ $value | quote }}
-{{- end }}
+  config.yaml: |
+{{ .Values.config | toYaml | indent 4 }}
