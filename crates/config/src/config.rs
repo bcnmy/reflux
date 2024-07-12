@@ -46,7 +46,8 @@ impl Config {
         let raw_config = RawConfig::from_yaml_str(public_config_yaml_contents)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
-            let rpc_url = env::var(&chain.rpc_url_env_name)?;
+            let rpc_url = env::var(&chain.rpc_url_env_name)
+                .map_err(|err| ConfigError::EnvVarNotFound(chain.rpc_url_env_name.clone(), err))?;
             chains.insert(
                 chain.id,
                 Arc::new(ChainConfig {
@@ -79,14 +80,19 @@ impl Config {
         }
 
         // Read Infra Config from environment variables
-        let redis_url = env::var("REDIS_URL")?;
-        let mongo_url = env::var("MONGO_URL")?;
+        let redis_url = env::var("REDIS_URL")
+            .map_err(|err| ConfigError::EnvVarNotFound("REDIS_URL".to_string(), err))?;
+        let mongo_url = env::var("MONGO_URL")
+            .map_err(|err| ConfigError::EnvVarNotFound("MONGO_URL".to_string(), err))?;
         let infra = InfraConfig { redis_url, mongo_url };
 
         // Read API keys from environment variables
-        let bungee_api_key = env::var("BUNGEE_API_KEY")?;
-        let covalent_api_key = env::var("COVALENT_API_KEY")?;
-        let coingecko_api_key = env::var("COINGECKO_API_KEY")?;
+        let bungee_api_key = env::var("BUNGEE_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("BUNGEE_API_KEY".to_string(), err))?;
+        let covalent_api_key = env::var("COVALENT_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("COVALENT_API_KEY".to_string(), err))?;
+        let coingecko_api_key = env::var("COINGECKO_API_KEY")
+            .map_err(|err| ConfigError::EnvVarNotFound("COINGECKO_API_KEY".to_string(), err))?;
 
         let bungee = BungeeConfig { base_url: raw_config.bungee.base_url, api_key: bungee_api_key };
         let covalent =
@@ -182,7 +188,7 @@ pub enum ConfigError {
     IoError(std::io::Error),
 
     #[display("Environment Variable Not Found: {}", _0)]
-    EnvVarNotFound(env::VarError),
+    EnvVarNotFound(String, env::VarError),
 }
 
 // Intermediate Config Type as Deserialization Target
