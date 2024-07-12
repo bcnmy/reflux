@@ -1,5 +1,5 @@
 name: Test Suite
-on: [pull_request]
+on: [ pull_request ]
 
 jobs:
   test:
@@ -30,6 +30,8 @@ jobs:
       COVALENT_API_KEY: ${{ secrets.COVALENT_API_KEY }}
       ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
       ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+      OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
+      BAE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       MONGO_URL: ${{ secrets.MONGO_URL }}
       REDIS_URL: ${{ secrets.REDIS_URL }}
     environment: Testing
