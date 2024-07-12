@@ -10,6 +10,7 @@ use reqwest::{Client, Url};
 use ruint::Uint;
 use serde::Serialize;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use config::Config;
 
@@ -22,7 +23,7 @@ use crate::token_price::utils::{Errors, get_token_amount_from_value_in_usd};
 pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     source: Source,
     config: Arc<Config>,
-    price_provider: PriceProvider,
+    price_provider: Arc<Mutex<PriceProvider>>,
     // (chain_id, token_address) -> contract
     erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
 }
@@ -47,7 +48,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
     pub fn new(
         config: Arc<Config>,
         source: Source,
-        price_provider: PriceProvider,
+        price_provider: Arc<Mutex<PriceProvider>>,
         erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
     ) -> Self {
         SettlementEngine { source, config, price_provider, erc20_instance_map }
@@ -73,7 +74,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
 
                 let token_amount = get_token_amount_from_value_in_usd(
                     &self.config,
-                    &self.price_provider,
+                    &self.price_provider.lock().await,
                     &route.route.from_token.symbol,
                     route.route.from_chain.id,
                     &route.source_amount_in_usd,
@@ -384,13 +385,14 @@ pub enum GenerateERC20InstanceMapErrors {
 mod tests {
     use std::collections::HashMap;
     use std::env;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
 
     use alloy::primitives::U256;
     use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
+    use tokio::sync::Mutex;
 
     use config::{Config, get_sample_config};
     use storage::{KeyValueStore, RedisClientError};
@@ -414,7 +416,7 @@ mod tests {
         type Error = Err;
 
         async fn get(&self, k: &String) -> Result<String, Self::Error> {
-            match self.map.lock().unwrap().get(k) {
+            match self.map.lock().await.get(k) {
                 Some(v) => Ok(v.clone()),
                 None => Result::Err(Err),
             }
@@ -427,7 +429,7 @@ mod tests {
         async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
             self.map
                 .lock()
-                .unwrap()
+                .await
                 .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
             Ok(())
         }
@@ -456,12 +458,12 @@ mod tests {
         )
         .unwrap();
 
-        let client = CoingeckoClient::new(
+        let client = Arc::new(Mutex::new(CoingeckoClient::new(
             config.coingecko.base_url.clone(),
             env::var("COINGECKO_API_KEY").unwrap(),
             KVStore::default(),
             Duration::from_secs(config.coingecko.expiry_sec),
-        );
+        )));
 
         let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
 

@@ -34,13 +34,13 @@ jobs:
       ETHEREUM_RPC_URL: ${{ secrets.ETHEREUM_RPC_URL }}
       ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
       OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
-      BAE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       MONGO_URL: ${{ secrets.MONGO_URL }}
       REDIS_URL: ${{ secrets.REDIS_URL }}
     environment: Testing
-          
+
   container_img_build_push_gar:
-    needs: [test]
+    needs: [ test ]
     # Allow the job to fetch a GitHub ID token
     permissions:
       id-token: write
@@ -49,7 +49,7 @@ jobs:
     strategy:
       matrix:
         image:
-          - us-docker.pkg.dev/biconomy-prod/biconomy-prod/reflux 
+          - us-docker.pkg.dev/biconomy-prod/biconomy-prod/reflux
           # LOCATION-docker.pkg.dev/PROJECT-ID/REPOSITORY/IMAGE
           # {owner}/{repo}/.github/workflows/{filename}@{ref}
     uses: bcnmy/devops/.github/workflows/container_img_build_push_gar.yaml@master

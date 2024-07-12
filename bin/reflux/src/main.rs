@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use axum::http::Method;
 use clap::Parser;
+use dotenv::dotenv;
 use log::{debug, error, info};
+use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
 use account_aggregation::service::AccountAggregationService;
@@ -34,6 +36,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    dotenv().expect("Failed to read .env");
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
     let mut args = Args::parse();
@@ -49,7 +52,8 @@ async fn main() {
     }
 
     // Load configuration from yaml
-    let config = Arc::new(Config::from_file(&args.config).expect("Failed to load config file"));
+    let config =
+        Arc::new(Config::build_from_file(&args.config).expect("Failed to load config file"));
 
     if args.indexer {
         run_indexer(config).await;
@@ -116,16 +120,16 @@ async fn run_solver(config: Arc<Config>) {
     let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
     let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
         .expect("Failed to Instantiate Bungee Client");
-    let token_price_provider = CoingeckoClient::new(
+    let token_price_provider = Arc::new(Mutex::new(CoingeckoClient::new(
         config.coingecko.base_url.clone(),
         config.coingecko.api_key.clone(),
         redis_client.clone(),
         Duration::from_secs(config.coingecko.expiry_sec),
-    );
+    )));
     let settlement_engine = Arc::new(SettlementEngine::new(
         Arc::clone(&config),
         bungee_client,
-        token_price_provider,
+        Arc::clone(&token_price_provider),
         erc20_instance_map,
     ));
 
@@ -202,12 +206,12 @@ async fn run_indexer(config: Arc<Config>) {
     let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
         .expect("Failed to Instantiate Bungee Client");
 
-    let token_price_provider = CoingeckoClient::new(
+    let token_price_provider = Arc::new(Mutex::new(CoingeckoClient::new(
         config.coingecko.base_url.clone(),
         config.coingecko.api_key.clone(),
         redis_provider.clone(),
         Duration::from_secs(config.coingecko.expiry_sec),
-    );
+    )));
 
     let indexer: Indexer<BungeeClient, RedisClient, RedisClient, CoingeckoClient<RedisClient>> =
         Indexer::new(

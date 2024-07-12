@@ -15,6 +15,7 @@ ruint = "1.12.3"
 linreg = "0.2.0"
 thiserror = "1.0.61"
 log = "0.4.21"
+governor = "0.6.3"
 
 # workspace dependencies
 account-aggregation = { workspace = true }
@@ -24,6 +25,7 @@ alloy = { version = "0.1.4", features = ["full"] }
 
 [dev-dependencies]
 mockall = "0.12.1"
+serial_test = "3.1.1"
 
 [lib]
 doctest = false
