@@ -147,6 +147,7 @@ mod tests {
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
+    use serial_test::serial;
     use storage::{KeyValueStore, RedisClientError};
 
     use crate::CoingeckoClient;
@@ -201,6 +202,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_should_fetch_fresh_api_price() {
         let config = setup_config();
 
@@ -220,6 +222,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_should_cache_api_prices() {
         let config = setup_config();
 

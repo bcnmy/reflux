@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::ops::Deref;
 
 use ruint;
 use ruint::aliases::U256;
@@ -7,9 +8,9 @@ use thiserror::Error;
 
 use crate::token_price::TokenPriceProvider;
 
-pub async fn get_token_amount_from_value_in_usd<T: TokenPriceProvider>(
+pub async fn get_token_amount_from_value_in_usd<T: TokenPriceProvider, U: Deref<Target = T>>(
     config: &config::Config,
-    token_price_provider: &T,
+    token_price_provider: &U,
     token_symbol: &String,
     chain_id: u32,
     value_in_usd: &f64,
@@ -36,9 +37,9 @@ pub async fn get_token_amount_from_value_in_usd<T: TokenPriceProvider>(
     Ok(token_amount_in_wei)
 }
 
-pub async fn get_token_price<T: TokenPriceProvider>(
+pub async fn get_token_price<T: TokenPriceProvider, U: Deref<Target = T>>(
     config: &config::Config,
-    token_price_provider: &T,
+    token_price_provider: &U,
     token_symbol: &String,
 ) -> Result<f64, Errors<T::Error>> {
     let token_config = config.tokens.get(token_symbol);
@@ -70,9 +71,11 @@ pub enum Errors<T: Debug + Send + Sync> {
 #[cfg(test)]
 mod tests {
     use std::fmt::Error;
+    use std::sync::Arc;
 
     use async_trait::async_trait;
     use ruint::Uint;
+    use tokio::sync::Mutex;
 
     use config::{Config, get_sample_config};
 
@@ -97,7 +100,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_token_amount_from_value_in_usd() {
         let config = setup();
-        let mut token_price_provider = TokenPriceProviderStub;
+        let token_price_provider = Arc::new(Mutex::new(TokenPriceProviderStub {}));
 
         let token_symbol = String::from("USDC");
         let chain_id = 1;
@@ -105,7 +108,7 @@ mod tests {
 
         let result = super::get_token_amount_from_value_in_usd(
             &config,
-            &mut token_price_provider,
+            &token_price_provider.lock().await,
             &token_symbol,
             chain_id,
             &value_in_usd,

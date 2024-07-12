@@ -5,12 +5,13 @@ use std::sync::Arc;
 use futures::stream::StreamExt;
 use log::{error, info};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use config::config::BucketConfig;
 
-use crate::{estimator, source, token_price, CostType, Route, RouteError};
+use crate::{CostType, estimator, Route, RouteError, source, token_price};
 
-const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 10;
+const SOURCE_FETCH_PER_BUCKET_RATE_LIMIT: usize = 5;
 const BUCKET_PROCESSING_RATE_LIMIT: usize = 5;
 
 pub struct Indexer<
@@ -23,7 +24,7 @@ pub struct Indexer<
     source: Source,
     model_store: ModelStore,
     message_producer: Producer,
-    token_price_provider: TokenPriceProvider,
+    token_price_provider: Arc<Mutex<TokenPriceProvider>>,
 }
 
 impl<
@@ -38,7 +39,7 @@ impl<
         source: RouteSource,
         model_store: ModelStore,
         message_producer: Producer,
-        token_price_provider: TokenPriceProvider,
+        token_price_provider: Arc<Mutex<TokenPriceProvider>>,
     ) -> Self {
         Indexer { config, source, model_store, message_producer, token_price_provider }
     }
@@ -84,7 +85,7 @@ impl<
                     let from_token_amount_in_wei =
                         token_price::utils::get_token_amount_from_value_in_usd(
                             &self.config,
-                            &self.token_price_provider,
+                            &self.token_price_provider.lock().await,
                             &bucket.from_token,
                             bucket.from_chain_id,
                             &input_value_in_usd,
@@ -161,13 +162,13 @@ impl<
 
         if data_points.is_empty() {
             error!("BucketID-{}: No data points were built", bucket_id);
-            return Err(BuildEstimatorError::NoDataPoints(bucket.clone()));
+            return Err(BuildEstimatorError::NoDataPoints(bucket_id));
         }
 
         // Build the Estimator
         info!("BucketID-{}:All data points fetched, building estimator...", bucket_id);
         let estimator = Estimator::build(data_points)
-            .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket.clone(), e))?;
+            .map_err(|e| BuildEstimatorError::EstimatorBuildError(bucket_id, e))?;
         Ok(estimator)
     }
 
@@ -294,10 +295,10 @@ pub enum IndexerErrors<
 #[derive(Debug, Error)]
 pub enum BuildEstimatorError<'est_de, Estimator: estimator::Estimator<'est_de, f64, f64>> {
     #[error("No data points found while building estimator for {:?}", _0)]
-    NoDataPoints(Arc<BucketConfig>),
+    NoDataPoints(u64),
 
     #[error("Estimator build error: {} for bucket {:?}", _1, _0)]
-    EstimatorBuildError(Arc<BucketConfig>, Estimator::Error),
+    EstimatorBuildError(u64, Estimator::Error),
 }
 
 #[cfg(test)]
@@ -311,14 +312,15 @@ mod tests {
     use async_trait::async_trait;
     use derive_more::Display;
     use thiserror::Error;
+    use tokio::sync::Mutex;
 
-    use config::{get_sample_config, Config};
+    use config::{Config, get_sample_config};
     use storage::{ControlFlow, KeyValueStore, MessageQueue, Msg, RedisClientError};
 
+    use crate::{BungeeClient, CostType};
     use crate::estimator::{Estimator, LinearRegressionEstimator};
     use crate::indexer::Indexer;
     use crate::token_price::TokenPriceProvider;
-    use crate::{BungeeClient, CostType};
 
     #[derive(Error, Display, Debug)]
     struct Err;
@@ -387,7 +389,9 @@ mod tests {
         }
     }
 
-    fn setup<'a>() -> (Config, BungeeClient, ModelStoreStub, ProducerStub, TokenPriceProviderStub) {
+    fn setup<'a>(
+    ) -> (Config, BungeeClient, ModelStoreStub, ProducerStub, Arc<Mutex<TokenPriceProviderStub>>)
+    {
         let mut config = get_sample_config();
         config.buckets = vec![
             Arc::new(config::BucketConfig {
@@ -421,7 +425,13 @@ mod tests {
         let message_producer = ProducerStub;
         let token_price_provider = TokenPriceProviderStub;
 
-        return (config, bungee_client, model_store, message_producer, token_price_provider);
+        return (
+            config,
+            bungee_client,
+            model_store,
+            message_producer,
+            Arc::new(Mutex::new(token_price_provider)),
+        );
     }
 
     #[tokio::test]
