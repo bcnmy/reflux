@@ -46,13 +46,7 @@ impl Config {
         let raw_config = RawConfig::from_yaml_str(public_config_yaml_contents)?;
         let mut chains = HashMap::new();
         for chain in raw_config.chains.0 {
-            let rpc_url = env::var(&chain.rpc_url_env_name);
-            if rpc_url.is_err() {
-                return Err(ConfigError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("Environment variable {} not found", chain.rpc_url_env_name),
-                )));
-            }
+            let rpc_url = env::var(&chain.rpc_url_env_name)?;
             chains.insert(
                 chain.id,
                 Arc::new(ChainConfig {
@@ -60,7 +54,7 @@ impl Config {
                     name: chain.name,
                     is_enabled: chain.is_enabled,
                     covalent_name: chain.covalent_name,
-                    rpc_url: rpc_url.unwrap(),
+                    rpc_url,
                 }),
             );
         }
