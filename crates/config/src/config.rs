@@ -398,7 +398,7 @@ impl TryFrom<TokenConfigByChainConfigsRaw> for TokenConfigByChainConfigs {
         Ok(TokenConfigByChainConfigs(
             key_values
                 .into_iter()
-                .map((|(k, v): (Result<_, _>, _)| (k.unwrap(), v)))
+                .map(|(k, v): (Result<_, _>, _)| (k.unwrap(), v))
                 .collect::<HashMap<u32, ChainSpecificTokenConfig>>(),
         ))
     }
