@@ -22,7 +22,7 @@ services:
     container_name: reflux-solver
     entrypoint: [ "/app/reflux", "--solver", "--config", "/app/ctx/config.docker.yaml" ]
     ports:
-      - "8000:8080"
+      - "8080:8080"
     depends_on:
       - redis
       - mongodb
