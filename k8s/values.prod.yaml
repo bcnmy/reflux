@@ -26,84 +26,32 @@ autoscale:
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
 
-config:
-  chains:
-    - id: 1
-      name: Ethereum
-      is_enabled: true
-      covalent_name: eth-mainnet
-      rpc_url_env_name: ETHEREUM_RPC_URL
-    - id: 42161
-      name: Arbitrum
-      covalent_name: arbitrum-mainnet
-      is_enabled: true
-      rpc_url_env_name: ARBITRUM_RPC_URL
-  tokens:
-    - symbol: USDC
-      is_enabled: true
-      coingecko_symbol: usd-coin
-      by_chain:
-        1:
-          is_enabled: true
-          decimals: 6
-          address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-        42161:
-          is_enabled: true
-          decimals: 6
-          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
-  buckets:
-    - from_chain_id: 1
-      to_chain_id: 42161
-      from_token: USDC
-      to_token: USDC
-      is_smart_contract_deposit_supported: false
-      token_amount_from_usd: 1
-      token_amount_to_usd: 10
-    - from_chain_id: 1
-      to_chain_id: 42161
-      from_token: USDC
-      to_token: USDC
-      is_smart_contract_deposit_supported: false
-      token_amount_from_usd: 10
-      token_amount_to_usd: 100
-    - from_chain_id: 1
-      to_chain_id: 42161
-      from_token: USDC
-      to_token: USDC
-      is_smart_contract_deposit_supported: false
-      token_amount_from_usd: 100
-      token_amount_to_usd: 1000
-    - from_chain_id: 1
-      to_chain_id: 42161
-      from_token: USDC
-      to_token: USDC
-      is_smart_contract_deposit_supported: false
-      token_amount_from_usd: 1000
-      token_amount_to_usd: 10000
-    - from_chain_id: 1
-      to_chain_id: 42161
-      from_token: USDC
-      to_token: USDC
-      is_smart_contract_deposit_supported: false
-      token_amount_from_usd: 10000
-      token_amount_to_usd: 100000
-  bungee:
-    base_url: https://api.socket.tech/v2
-  covalent:
-    base_url: "https://api.covalenthq.com"
-  coingecko:
-    base_url: "https://api.coingecko.com/api/v3"
-    expiry_sec: 300
-  server:
-    port: 8080
-    host: "localhost"
-  indexer_config:
-    indexer_update_topic: indexer_update
-    indexer_update_message: message
-    points_per_bucket: 10
-  solver_config:
-    x_value: 2.0
-    y_value: 1.0
+ingress:
+  host: reflux.prod.biconomy.io
+
+cronjob:
+  schedule: "0 */5 * * *"
+  restartPolicy: OnFailure
+
+datadog:
+  enable: true
+  env: "production"
+
+  service: "reflux"
+  version: "v0.0.10"
+  lib_version: "v0.0.1"
+
+  configs:
+    DD_TRACE_AGENT_URL: "unix:///var/run/datadog/apm.socket"
+    DD_ENV: "production"
+    DD_SERVICE: "reflux"
+    DD_VERSION: "v0.0.1"
+    DD_LIB_VERSION: "v0.0.1"
+    DD_TRACE_DEBUG: "false"
+    DD_TRACE_STARTUP_LOGS: "false"
+    DD_PROFILING_ENABLED: "true"
+    DD_LOGS_INJECTION: "false"
+    DD_RUNTIME_METRICS_ENABLED: "true"
 
 secret:
   projectID: biconomy-prod
@@ -138,31 +86,1991 @@ secret:
       version: latest
       property: ARBITRUM_RPC_URL
 
-ingress:
-  host: reflux.prod.biconomy.io
+config:
+  chains:
+    - id: 1
+      name: Ethereum
+      is_enabled: true
+      covalent_name: eth-mainnet
+      rpc_url_env_name: ETHEREUM_RPC_URL
+    - id: 42161
+      name: Arbitrum
+      covalent_name: arbitrum-mainnet
+      is_enabled: true
+      rpc_url_env_name: ARBITRUM_RPC_URL
+    - id: 10
+      name: Optimism
+      is_enabled: true
+      covalent_name: optimism-mainnet
+      rpc_url_env_name: OPTIMISM_RPC_URL
+    - id: 8453
+      name: Base
+      is_enabled: true
+      covalent_name: base-mainnet
+      rpc_url_env_name: BASE_RPC_URL
+  tokens:
+    - symbol: USDC
+      is_enabled: true
+      coingecko_symbol: usd-coin
+      by_chain:
+        "1":
+          is_enabled: true
+          decimals: 6
+          address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        "42161":
+          is_enabled: true
+          decimals: 6
+          address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+        "10":
+          is_enabled: true
+          decimals: 6
+          address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
+        "8453":
+          is_enabled: true
+          decimals: 6
+          address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    - symbol: USDT
+      is_enabled: true
+      coingecko_symbol: tether
+      by_chain:
+        "1":
+          is_enabled: true
+          decimals: 6
+          address: '0xdac17f958d2ee523a2206206994597c13d831ec7'
+        "42161":
+          is_enabled: true
+          decimals: 6
+          address: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+        "10":
+          is_enabled: true
+          decimals: 6
+          address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58"
+        "8453":
+          is_enabled: true
+          decimals: 6
+          address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
+    - symbol: ETH
+      is_enabled: true
+      coingecko_symbol: ethereum
+      by_chain:
+        "42161":
+          is_enabled: true
+          decimals: 18
+          address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "10":
+          is_enabled: true
+          decimals: 18
+          address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "8453":
+          is_enabled: true
+          decimals: 18
+          address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  buckets:
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 42161
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 10
+      to_chain_id: 8453
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 42161
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDC
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: USDT
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDC
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: USDT
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1
+      token_amount_to_usd: 10
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10
+      token_amount_to_usd: 100
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 100
+      token_amount_to_usd: 1000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 1000
+      token_amount_to_usd: 10000
+    - from_chain_id: 8453
+      to_chain_id: 10
+      from_token: ETH
+      to_token: ETH
+      is_smart_contract_deposit_supported: false
+      token_amount_from_usd: 10000
+      token_amount_to_usd: 100000
 
-
-cronjob:
-  schedule: "0 */5 * * *"
-  restartPolicy: OnFailure
-
-
-datadog:
-  enable: true
-  env: "production"
-
-  service: "reflux"
-  version: "v0.0.10"
-  lib_version: "v0.0.1"
-
-  configs:
-    DD_TRACE_AGENT_URL: "unix:///var/run/datadog/apm.socket"
-    DD_ENV: "production"
-    DD_SERVICE: "reflux"
-    DD_VERSION: "v0.0.1"
-    DD_LIB_VERSION: "v0.0.1"
-    DD_TRACE_DEBUG: "false"
-    DD_TRACE_STARTUP_LOGS: "false"
-    DD_PROFILING_ENABLED: "true"
-    DD_LOGS_INJECTION: "false"
-    DD_RUNTIME_METRICS_ENABLED: "true"
+  bungee:
+    base_url: https://api.socket.tech/v2
+  covalent:
+    base_url: "https://api.covalenthq.com"
+  coingecko:
+    base_url: "https://api.coingecko.com/api/v3"
+    expiry_sec: 300
+  server:
+    port: 8080
+    host: "0.0.0.0"
+  indexer_config:
+    indexer_update_topic: indexer_update
+    indexer_update_message: message
+    points_per_bucket: 8
+  solver_config:
+    x_value: 2.0
+    y_value: 1.0
