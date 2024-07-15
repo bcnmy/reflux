@@ -245,7 +245,7 @@ impl RoutingEngine {
         let cache = self.cache.read().await;
         let value = cache
             .get(&key)
-            .ok_or_else(|| RoutingEngineError::CacheError("No cached value found".to_string()))?;
+            .ok_or_else(|| RoutingEngineError::CacheError(format!("No cached value found for {}", key)))?;
         let estimator: LinearRegressionEstimator = serde_json::from_str(value)?;
 
         Ok(estimator.estimate(target_amount_in_usd))
