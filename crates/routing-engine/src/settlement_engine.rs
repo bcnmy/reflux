@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 use config::Config;
 
-use crate::{blockchain, BridgeResult};
+use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 use crate::token_price::TokenPriceProvider;
@@ -58,7 +58,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
         &self,
         routes: Vec<BridgeResult>,
     ) -> Result<Vec<TransactionWithType>, SettlementEngineErrors<Source, PriceProvider>> {
-        info!("Generating transactions for routes: {:?}", routes);
+        info!("Generating transactions for routes: {}", BridgeResultVecWrapper(&routes));
 
         let (results, failed): (
             Vec<
@@ -70,7 +70,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
             _,
         ) = futures::stream::iter(routes.into_iter())
             .map(|route| async move {
-                info!("Generating transactions for route: {:?}", route.route);
+                info!("Generating transactions for route: {}", route.route);
 
                 let token_amount = get_token_amount_from_value_in_usd(
                     &self.config,
@@ -82,7 +82,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                 .await
                 .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
 
-                info!("Token amount: {:?} for route {:?}", token_amount, route);
+                info!("Token amount: {:?} for route {}", token_amount, route);
 
                 let (ethereum_transactions, required_approval_details) = self
                     .source
@@ -95,7 +95,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                     .await
                     .map_err(|err| SettlementEngineErrors::GenerateTransactionsError(err))?;
 
-                info!("Generated transactions: {:?} for route {:?}", ethereum_transactions, route);
+                info!("Generated transactions: {:?} for route {}", ethereum_transactions, route);
 
                 Ok::<_, SettlementEngineErrors<_, _>>((
                     ethereum_transactions,
@@ -108,9 +108,10 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
             .into_iter()
             .partition(Result::is_ok);
 
-        let failed: Vec<_> = failed.into_iter().map(Result::unwrap_err).collect();
+        let mut failed: Vec<_> = failed.into_iter().map(Result::unwrap_err).collect();
         if !failed.is_empty() {
             error!("Failed to generate transactions: {:?}", failed);
+            return Err(failed.remove(0));
         }
 
         if results.is_empty() {
@@ -200,7 +201,8 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
 
         Ok(Some(TransactionWithType {
             transaction: EthereumTransaction {
-                from: required_approval_details.owner.clone(),
+                from_address: required_approval_details.owner.clone(),
+                from_chain: required_approval_details.chain_id,
                 to: token_instance.address().to_string(),
                 value: Uint::ZERO,
                 calldata,

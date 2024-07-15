@@ -11,7 +11,8 @@ pub mod bungee;
 
 #[derive(Debug, Serialize)]
 pub struct EthereumTransaction {
-    pub from: String,
+    pub from_address: String,
+    pub from_chain: u32,
     pub to: String,
     pub value: U256,
     pub calldata: String,

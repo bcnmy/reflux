@@ -64,6 +64,10 @@ tokens:
     is_enabled: true
     coingecko_symbol: ethereum
     by_chain:
+      "1":
+        is_enabled: true
+        decimals: 18
+        address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       "42161":
         is_enabled: true
         decimals: 18
@@ -1981,7 +1985,7 @@ server:
 indexer_config:
   indexer_update_topic: indexer_update
   indexer_update_message: message
-  points_per_bucket: 8
+  points_per_bucket: 4
 solver_config:
   x_value: 2.0
   y_value: 1.0

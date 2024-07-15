@@ -12,7 +12,7 @@ use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
     BridgeResult,
-    estimator::{Estimator, LinearRegressionEstimator}, Route,
+    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -130,7 +130,7 @@ impl RoutingEngine {
             total_cost += swap_total_cost;
         }
 
-        debug!("Selected assets: {:?}", selected_routes);
+        debug!("Selected assets: {}", BridgeResultVecWrapper(&selected_routes));
         info!(
             "Total cost for user: {} on chain {} to token {} is {}",
             account, to_chain, to_token, total_cost

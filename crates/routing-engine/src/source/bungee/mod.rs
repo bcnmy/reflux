@@ -19,7 +19,7 @@ use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 
 mod types;
 
-const BUNGEE_API_RATE_LIMIT: u32 = 2;
+const BUNGEE_API_RATE_LIMIT: u32 = 3;
 
 #[derive(Debug)]
 pub struct BungeeClient {
@@ -176,8 +176,9 @@ impl RouteSource for BungeeClient {
             from_amount: from_token_amount.to_string(),
             user_address: sender_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
             recipient: recipient_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
-            unique_routes_per_bridge: false,
+            unique_routes_per_bridge: true,
             is_contract_call: route.is_smart_contract_deposit,
+            single_tx_only: true,
         };
 
         // Get quote
@@ -219,7 +220,10 @@ impl RouteSource for BungeeClient {
         }
 
         if route_costs_in_usd.len() == 0 {
-            error!("No valid routes returned by Bungee API for route {:?}", route);
+            error!(
+                "No valid routes returned by Bungee API for route {} and from_token_amount {}",
+                route, from_token_amount
+            );
             return Err(BungeeFetchRouteCostError::NoValidRouteError());
         }
 
@@ -246,10 +250,7 @@ impl RouteSource for BungeeClient {
         (Vec<EthereumTransaction>, Vec<RequiredApprovalDetails>),
         Self::GenerateRouteTransactionsError,
     > {
-        info!(
-            "Generating cheapest route transactions for route {:?} with amount {}",
-            route, amount
-        );
+        info!("Generating cheapest route transactions for route {} with amount {}", route, amount);
 
         let (bungee_route, _) = self
             .fetch_least_cost_route_and_cost_in_usd(
@@ -261,7 +262,7 @@ impl RouteSource for BungeeClient {
             )
             .await?;
 
-        info!("Retrieved bungee route {:?} for route {:?}", bungee_route, route);
+        info!("Retrieved bungee route {} for route {}", bungee_route, route);
 
         let tx = self.build_tx(BuildTxRequest { route: bungee_route }).await?;
         if !tx.success {
@@ -276,7 +277,8 @@ impl RouteSource for BungeeClient {
         info!("Returned transaction from bungee {:?}", tx);
 
         let transactions = vec![EthereumTransaction {
-            from: sender_address.clone(),
+            from_address: sender_address.clone(),
+            from_chain: route.to_chain.id,
             to: tx.tx_target,
             value: Uint::from_str(&tx.value).map_err(|err| {
                 error!("Error while parsing tx data: {}", err);
@@ -287,18 +289,21 @@ impl RouteSource for BungeeClient {
 
         info!("Generated transactions {:?}", transactions);
 
-        let approvals = vec![RequiredApprovalDetails {
-            chain_id: tx.chain_id,
-            token_address: tx.approval_data.approval_token_address,
-            owner: tx.approval_data.owner,
-            target: tx.approval_data.allowance_target,
-            amount: Uint::from_str(&tx.approval_data.minimum_approval_amount).map_err(|err| {
-                error!("Error while parsing approval data: {}", err);
-                GenerateRouteTransactionsError::InvalidU256Error(
-                    tx.approval_data.minimum_approval_amount,
-                )
-            })?,
-        }];
+        let approvals = match tx.approval_data {
+            Some(approval_data) => vec![RequiredApprovalDetails {
+                chain_id: tx.chain_id,
+                token_address: approval_data.approval_token_address,
+                owner: approval_data.owner,
+                target: approval_data.allowance_target,
+                amount: Uint::from_str(&approval_data.minimum_approval_amount).map_err(|err| {
+                    error!("Error while parsing approval data: {}", err);
+                    GenerateRouteTransactionsError::InvalidU256Error(
+                        approval_data.minimum_approval_amount,
+                    )
+                })?,
+            }],
+            None => vec![],
+        };
 
         info!("Generated approvals {:?}", approvals);
 
@@ -346,6 +351,7 @@ mod tests {
                 recipient: "0x0000000000000000000000000000000000000000".to_string(),
                 is_contract_call: false,
                 unique_routes_per_bridge: false,
+                single_tx_only: true,
             })
             .await
             .unwrap();

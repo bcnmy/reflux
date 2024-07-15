@@ -26,13 +26,27 @@ pub enum CostType {
     // BridgingTime,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Route {
     from_chain: Arc<ChainConfig>,
     to_chain: Arc<ChainConfig>,
     from_token: Arc<TokenConfig>,
     to_token: Arc<TokenConfig>,
     is_smart_contract_deposit: bool,
+}
+
+impl Display for Route {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Route: chain: {} -> {}, token: {} -> {}, is_smart_contract_deposit: {}",
+            self.from_chain.id,
+            self.to_chain.id,
+            self.from_token.symbol,
+            self.to_token.symbol,
+            self.is_smart_contract_deposit
+        )
+    }
 }
 
 impl Route {
@@ -100,6 +114,29 @@ pub struct BridgeResult {
     source_amount_in_usd: f64,
     from_address: String,
     to_address: String,
+}
+
+impl Display for BridgeResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BridgeResult: route: {}, source_amount_in_usd: {}, from_address: {}, to_address: {}",
+            self.route, self.source_amount_in_usd, self.from_address, self.to_address
+        )
+    }
+}
+
+pub struct BridgeResultVecWrapper<'a>(&'a Vec<BridgeResult>);
+
+impl Display for BridgeResultVecWrapper<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for bridge_result in self.0 {
+            write!(f, "{}, ", bridge_result)?;
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
 }
 
 impl BridgeResult {
