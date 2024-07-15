@@ -20,7 +20,7 @@ spec:
           service:
             name: {{ .Values.name }}
             port:
-              number: 8
+              number: 8080
         path: /
         pathType: ImplementationSpecific
   tls:

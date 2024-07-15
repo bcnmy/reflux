@@ -9,5 +9,5 @@ spec:
   selector:
     app: {{ .Values.name }}
   ports:
-    - port: 8090
+    - port: 8080
       targetPort: {{ .Values.port }}
