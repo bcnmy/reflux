@@ -17,31 +17,24 @@ spec:
         metadata:
             labels:
                 app: {{ .Values.name }}
-            {{- if .Values.datadog.enable }}
-                {{- include "datadog.datatrace" $ | nindent 8 }}
-                {{- include "datadog.datatrace-admission" $ | nindent 8 }}
-            {{- end }}
         spec:
           containers:
           - name: {{ .Values.name }}
             image: {{ .Values.image_name }}:{{ .Values.image_tag }}
             imagePullPolicy: {{ .Values.imagePullPolicy }}
+            envFrom:
+              - secretRef:
+                    name: {{ .Values.name }}
             command:
-            {{- range .Values.cronjob.command }}
-              - {{ . }}
-            {{- end }}
+              - /bin/sh
+              - '-c'
+            args:
+              - reflux --indexer --config config.yaml
             volumeMounts:
               - name: config-volume
                 mountPath: /home/nonroot/reflux/config.yaml
                 subPath: config.yaml
           restartPolicy: {{ .Values.cronjob.restartPolicy }}
-          resources:
-            requests:
-              memory: {{ .Values.resource.requests.memory }}
-              cpu: {{ .Values.resource.requests.cpu }}
-            limits:
-              memory: {{ .Values.resource.limits.memory }}
-              cpu: {{ .Values.resource.limits.cpu }}
           volumes:
             - name: config-volume
               configMap:
