@@ -36,7 +36,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    dotenv().expect("Failed to read .env");
+    if let Err(e) = dotenv() {
+        error!("Failed to load .env file: {}", e);
+    }
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
     let mut args = Args::parse();
