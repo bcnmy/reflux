@@ -33,7 +33,7 @@
         environment: Testing
               
       container_img_build_push_gar:
-        # needs: [test]
+        needs: [test]
         # Allow the job to fetch a GitHub ID token
         permissions:
           id-token: write
