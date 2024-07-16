@@ -147,7 +147,7 @@ impl RouteSource for BungeeClient {
         recipient_address: Option<&String>,
         estimation_type: &CostType,
     ) -> Result<(Self::BaseRouteType, f64), Self::FetchRouteCostError> {
-        info!("Fetching least route cost in USD for route {:?} with token amount {} and estimation type {}", route, from_token_amount, estimation_type);
+        info!("Fetching least route cost in USD for route {} with token amount {} and estimation type {}", route, from_token_amount, estimation_type);
 
         // Build GetQuoteRequest
         let from_token = route.from_token.by_chain.get(&route.from_chain.id);
@@ -281,7 +281,7 @@ impl RouteSource for BungeeClient {
 
         let transactions = vec![EthereumTransaction {
             from_address: sender_address.clone(),
-            from_chain: route.to_chain.id,
+            from_chain: route.from_chain.id,
             to: tx.tx_target,
             value: Uint::from_str(&tx.value).map_err(|err| {
                 error!("Error while parsing tx data: {}", err);
