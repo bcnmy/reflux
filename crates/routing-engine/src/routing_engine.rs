@@ -159,7 +159,7 @@ impl RoutingEngine {
         let y = self.estimates.y_value;
         let mut assets_sorted_by_bridging_cost: Vec<(TokenWithBalance, f64)> =
             stream::iter(assets.into_iter())
-                .then(|balance| async move {
+                .then(|mut balance| async move {
                     let balance_taken = cmp::min_by(to_value_usd, balance.amount_in_usd, |a, b| {
                         a.partial_cmp(b).unwrap_or_else(|| cmp::Ordering::Less)
                     });
@@ -174,6 +174,13 @@ impl RoutingEngine {
                             ),
                         )
                         .await;
+
+                    if balance.token == "ETH" {
+                        balance.amount_in_usd -= 1.0;
+                    }
+                    if balance.amount_in_usd < 0.0 {
+                        balance.amount_in_usd = 0.0;
+                    }
                     (balance, fee_cost)
                 })
                 .collect::<Vec<_>>()
