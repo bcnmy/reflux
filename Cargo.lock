@@ -3158,10 +3158,12 @@ dependencies = [
  "clap",
  "config",
  "dotenv",
+ "futures-util",
  "log",
  "routing-engine",
  "simple_logger",
  "storage",
+ "thiserror",
  "tokio",
  "tower-http",
 ]

@@ -1,5 +1,5 @@
+use std::{cmp, env};
 use std::collections::HashMap;
-use std::env;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::num::ParseIntError;
 use std::ops::Deref;
@@ -428,6 +428,43 @@ impl Deref for TokenConfigByChainConfigs {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(try_from = "String")]
+pub struct TokenAddress(String);
+
+impl PartialEq<Self> for TokenAddress {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl cmp::Eq for TokenAddress {}
+
+impl Hash for TokenAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl Display for TokenAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for TokenAddress {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let pattern = r"0x[a-fA-F0-9]{40}";
+        if regex::Regex::new(pattern).unwrap().is_match(&value) {
+            Ok(TokenAddress(value.to_lowercase()))
+        } else {
+            Err(format!("Invalid Token Address: {}", value))
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Validate, Clone)]
 pub struct ChainSpecificTokenConfig {
     // The number of decimals the token has
@@ -435,8 +472,7 @@ pub struct ChainSpecificTokenConfig {
     #[validate(maximum = 18)]
     pub decimals: u8,
     // The token address on the chain
-    #[validate(pattern = r"0x[a-fA-F0-9]{40}")]
-    pub address: String,
+    pub address: TokenAddress,
     // Whether the token is supported on this chain
     pub is_enabled: bool,
 }

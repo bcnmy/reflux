@@ -19,6 +19,7 @@ pub struct GetQuoteRequest {
     pub recipient: String,
     pub is_contract_call: bool,
     pub unique_routes_per_bridge: bool,
+    pub single_tx_only: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -85,7 +86,7 @@ pub struct BuildTxResponse {
     pub tx_type: String,
     pub value: String,
     pub total_user_tx: Option<u32>,
-    pub approval_data: BuildTxResponseApprovalData,
+    pub approval_data: Option<BuildTxResponseApprovalData>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

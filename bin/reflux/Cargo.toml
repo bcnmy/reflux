@@ -11,6 +11,7 @@ log = "0.4.21"
 simple_logger = "5.0.0"
 clap = { version = "4.5.7", features = ["derive"] }
 dotenv = "0.15.0"
+futures-util = "0.3.30"
 
 # workspace dependencies
 account-aggregation = { workspace = true }
@@ -18,3 +19,4 @@ storage = { workspace = true }
 config = { workspace = true }
 routing-engine = { workspace = true }
 api = { workspace = true }
+thiserror = "1.0.61"

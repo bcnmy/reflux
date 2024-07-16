@@ -12,7 +12,7 @@ use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
     BridgeResult,
-    estimator::{Estimator, LinearRegressionEstimator}, Route,
+    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -130,7 +130,7 @@ impl RoutingEngine {
             total_cost += swap_total_cost;
         }
 
-        debug!("Selected assets: {:?}", selected_routes);
+        debug!("Selected assets: {}", BridgeResultVecWrapper(&selected_routes));
         info!(
             "Total cost for user: {} on chain {} to token {} is {}",
             account, to_chain, to_token, total_cost
@@ -245,7 +245,7 @@ impl RoutingEngine {
         let cache = self.cache.read().await;
         let value = cache
             .get(&key)
-            .ok_or_else(|| RoutingEngineError::CacheError("No cached value found".to_string()))?;
+            .ok_or_else(|| RoutingEngineError::CacheError(format!("No cached value found for {}", key)))?;
         let estimator: LinearRegressionEstimator = serde_json::from_str(value)?;
 
         Ok(estimator.estimate(target_amount_in_usd))
