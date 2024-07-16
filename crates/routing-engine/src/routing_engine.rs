@@ -8,14 +8,13 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
-use config::{ChainConfig, Config, config::BucketConfig, SolverConfig, TokenConfig};
+use config::{config::BucketConfig, ChainConfig, Config, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
-    BridgeResult,
-    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
+    estimator::{Estimator, LinearRegressionEstimator},
+    BridgeResult, BridgeResultVecWrapper, Route,
 };
-use crate::token_price::utils::get_token_price;
 
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
@@ -345,12 +344,12 @@ mod tests {
     use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
+    use crate::estimator::Estimator;
+    use crate::routing_engine::PathQuery;
     use crate::{
         estimator::{DataPoint, LinearRegressionEstimator},
         routing_engine::{RoutingEngine, RoutingEngineError},
     };
-    use crate::estimator::Estimator;
-    use crate::routing_engine::PathQuery;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
