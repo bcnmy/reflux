@@ -8,13 +8,14 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
-use config::{ChainConfig, config::BucketConfig, SolverConfig, TokenConfig};
+use config::{ChainConfig, Config, config::BucketConfig, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
     BridgeResult,
     BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
+use crate::token_price::utils::get_token_price;
 
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
@@ -30,6 +31,9 @@ pub enum RoutingEngineError {
 
     #[error("Cache error: {0}")]
     CacheError(String),
+
+    #[error("Bucket not found error: chain {0} -> {1}, token: {2} -> {3}, amount: {4}")]
+    BucketNotFoundError(u32, u32, String, String, f64),
 
     #[error("User balance fetch error: {0}")]
     UserBalanceFetchError(String),
@@ -111,6 +115,8 @@ impl RoutingEngine {
         debug!("Direct assets: {:?}", direct_assets);
         debug!("Non-direct assets: {:?}", non_direct_assets);
 
+        // let to_value_usd =
+
         let (mut selected_routes, total_amount_needed, mut total_cost) = self
             .generate_optimal_routes(direct_assets, to_chain, to_token, to_value, account)
             .await?;
@@ -154,7 +160,9 @@ impl RoutingEngine {
         let mut assets_sorted_by_bridging_cost: Vec<(TokenWithBalance, f64)> =
             stream::iter(assets.into_iter())
                 .then(|balance| async move {
-                    let balance_taken = cmp::min_by(to_value_usd, balance.amount_in_usd, |a, b| a.partial_cmp(b).unwrap_or_else(|| cmp::Ordering::Less));
+                    let balance_taken = cmp::min_by(to_value_usd, balance.amount_in_usd, |a, b| {
+                        a.partial_cmp(b).unwrap_or_else(|| cmp::Ordering::Less)
+                    });
                     let fee_cost = self
                         .estimate_bridging_cost(
                             balance_taken,
@@ -239,15 +247,21 @@ impl RoutingEngine {
                 matches_path && matches_amount
             })
             .ok_or_else(|| {
-                RoutingEngineError::CacheError("No matching bucket found".to_string())
+                RoutingEngineError::BucketNotFoundError(
+                    path.0,
+                    path.1,
+                    path.2.clone(),
+                    path.3.clone(),
+                    target_amount_in_usd,
+                )
             })?;
 
         let key = bucket.get_hash().to_string();
 
         let cache = self.cache.read().await;
-        let value = cache
-            .get(&key)
-            .ok_or_else(|| RoutingEngineError::CacheError(format!("No cached value found for {}", key)))?;
+        let value = cache.get(&key).ok_or_else(|| {
+            RoutingEngineError::CacheError(format!("No cached value found for {}", key))
+        })?;
         let estimator: LinearRegressionEstimator = serde_json::from_str(value)?;
 
         Ok(estimator.estimate(target_amount_in_usd))
@@ -361,7 +375,7 @@ mod tests {
             DataPoint { x: 1.0, y: 1.0 },
             DataPoint { x: 2.0, y: 2.0 },
         ])
-            .unwrap();
+        .unwrap();
         let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
 
         // Create a cache with a dummy bucket
@@ -376,8 +390,8 @@ mod tests {
             "test".to_string(),
             true,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
@@ -426,8 +440,8 @@ mod tests {
             "test".to_string(),
             true,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
             user_db_provider.clone(),
@@ -462,7 +476,7 @@ mod tests {
             DataPoint { x: 1.0, y: 1.0 },
             DataPoint { x: 2.0, y: 2.0 },
         ])
-            .unwrap();
+        .unwrap();
         let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
         // Create a cache with a dummy bucket
         let key1 = buckets[0].get_hash().to_string();
