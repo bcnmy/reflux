@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
     BridgeResult,
-    estimator::{Estimator, LinearRegressionEstimator}, Route,
+    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
 
 /// (from_chain, to_chain, from_token, to_token)
@@ -130,7 +131,7 @@ impl RoutingEngine {
             total_cost += swap_total_cost;
         }
 
-        debug!("Selected assets: {:?}", selected_routes);
+        debug!("Selected assets: {}", BridgeResultVecWrapper(&selected_routes));
         info!(
             "Total cost for user: {} on chain {} to token {} is {}",
             account, to_chain, to_token, total_cost
@@ -153,9 +154,10 @@ impl RoutingEngine {
         let mut assets_sorted_by_bridging_cost: Vec<(TokenWithBalance, f64)> =
             stream::iter(assets.into_iter())
                 .then(|balance| async move {
+                    let balance_taken = cmp::min_by(to_value_usd, balance.amount_in_usd, |a, b| a.partial_cmp(b).unwrap_or_else(|| cmp::Ordering::Less));
                     let fee_cost = self
                         .estimate_bridging_cost(
-                            balance.amount_in_usd,
+                            balance_taken,
                             PathQuery(
                                 balance.chain_id,
                                 to_chain,
@@ -193,10 +195,10 @@ impl RoutingEngine {
             if total_amount_needed <= 0.0 {
                 break;
             }
-            let amount_to_take = if balance.amount >= total_amount_needed {
+            let amount_to_take = if balance.amount_in_usd >= total_amount_needed {
                 total_amount_needed
             } else {
-                balance.amount
+                balance.amount_in_usd
             };
             total_amount_needed -= amount_to_take;
             total_cost += fee;
@@ -245,7 +247,7 @@ impl RoutingEngine {
         let cache = self.cache.read().await;
         let value = cache
             .get(&key)
-            .ok_or_else(|| RoutingEngineError::CacheError("No cached value found".to_string()))?;
+            .ok_or_else(|| RoutingEngineError::CacheError(format!("No cached value found for {}", key)))?;
         let estimator: LinearRegressionEstimator = serde_json::from_str(value)?;
 
         Ok(estimator.estimate(target_amount_in_usd))
@@ -359,7 +361,7 @@ mod tests {
             DataPoint { x: 1.0, y: 1.0 },
             DataPoint { x: 2.0, y: 2.0 },
         ])
-        .unwrap();
+            .unwrap();
         let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
 
         // Create a cache with a dummy bucket
@@ -374,8 +376,8 @@ mod tests {
             "test".to_string(),
             true,
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
 
         let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
@@ -424,8 +426,8 @@ mod tests {
             "test".to_string(),
             true,
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
         let aas_client = Arc::new(AccountAggregationService::new(
             user_db_provider.clone(),
             user_db_provider.clone(),
@@ -460,7 +462,7 @@ mod tests {
             DataPoint { x: 1.0, y: 1.0 },
             DataPoint { x: 2.0, y: 2.0 },
         ])
-        .unwrap();
+            .unwrap();
         let serialized_estimator = serde_json::to_string(&dummy_estimator)?;
         // Create a cache with a dummy bucket
         let key1 = buckets[0].get_hash().to_string();

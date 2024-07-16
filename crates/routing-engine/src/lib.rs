@@ -5,8 +5,8 @@ pub use alloy::transports::Transport;
 use derive_more::Display;
 use thiserror::Error;
 
-use config::{ChainConfig, TokenConfig};
 use config::config::{BucketConfig, Config};
+use config::{ChainConfig, TokenConfig};
 pub use indexer::Indexer;
 pub use source::bungee::BungeeClient;
 pub use token_price::CoingeckoClient;
@@ -26,13 +26,27 @@ pub enum CostType {
     // BridgingTime,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Route {
     from_chain: Arc<ChainConfig>,
     to_chain: Arc<ChainConfig>,
     from_token: Arc<TokenConfig>,
     to_token: Arc<TokenConfig>,
     is_smart_contract_deposit: bool,
+}
+
+impl Display for Route {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Route: chain: {} -> {}, token: {} -> {}, is_smart_contract_deposit: {}",
+            self.from_chain.id,
+            self.to_chain.id,
+            self.from_token.symbol,
+            self.to_token.symbol,
+            self.is_smart_contract_deposit
+        )
+    }
 }
 
 impl Route {
@@ -102,6 +116,29 @@ pub struct BridgeResult {
     to_address: String,
 }
 
+impl Display for BridgeResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BridgeResult: route: {}, source_amount_in_usd: {}, from_address: {}, to_address: {}",
+            self.route, self.source_amount_in_usd, self.from_address, self.to_address
+        )
+    }
+}
+
+pub struct BridgeResultVecWrapper<'a>(&'a Vec<BridgeResult>);
+
+impl Display for BridgeResultVecWrapper<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for bridge_result in self.0 {
+            write!(f, "{}, ", bridge_result)?;
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
+}
+
 impl BridgeResult {
     pub fn build(
         config: &Config,
@@ -141,7 +178,7 @@ mod test {
         let config = get_sample_config();
         let route = super::Route::build(
             &config,
-            &1,
+            &10,
             &42161,
             &"USDC".to_string(),
             &"USDT".to_string(),
@@ -157,7 +194,7 @@ mod test {
         let config = get_sample_config();
         let bridge_result = super::BridgeResult::build(
             &config,
-            &1,
+            &10,
             &42161,
             &"USDC".to_string(),
             &"USDT".to_string(),
