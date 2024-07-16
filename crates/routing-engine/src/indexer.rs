@@ -395,7 +395,7 @@ mod tests {
         let mut config = get_sample_config();
         config.buckets = vec![
             Arc::new(config::BucketConfig {
-                from_chain_id: 1,
+                from_chain_id: 10,
                 to_chain_id: 42161,
                 from_token: "USDC".to_string(),
                 to_token: "USDC".to_string(),
@@ -404,7 +404,7 @@ mod tests {
                 token_amount_to_usd: 100.0,
             }),
             Arc::new(config::BucketConfig {
-                from_chain_id: 1,
+                from_chain_id: 10,
                 to_chain_id: 42161,
                 from_token: "USDC".to_string(),
                 to_token: "USDC".to_string(),

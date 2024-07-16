@@ -69,7 +69,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -104,7 +104,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -139,7 +139,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -174,7 +174,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -209,7 +209,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -244,7 +244,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 42161
@@ -279,7 +279,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -314,7 +314,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -349,7 +349,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -384,7 +384,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -419,7 +419,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -454,7 +454,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -489,7 +489,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -524,7 +524,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -559,7 +559,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 10
@@ -594,7 +594,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -629,7 +629,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -664,7 +664,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -699,7 +699,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -734,7 +734,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -769,7 +769,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -804,7 +804,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -839,7 +839,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -874,7 +874,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 42161
     to_chain_id: 8453
@@ -909,7 +909,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -944,7 +944,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -979,7 +979,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1014,7 +1014,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1049,7 +1049,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1084,7 +1084,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1119,7 +1119,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1154,7 +1154,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1189,7 +1189,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 42161
@@ -1224,7 +1224,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1259,7 +1259,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1294,7 +1294,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1329,7 +1329,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1364,7 +1364,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1399,7 +1399,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 10
@@ -1434,7 +1434,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1469,7 +1469,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1504,7 +1504,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1539,7 +1539,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1574,7 +1574,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1609,7 +1609,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1644,7 +1644,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1679,7 +1679,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1714,7 +1714,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 10
     to_chain_id: 8453
@@ -1749,7 +1749,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1784,7 +1784,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1819,7 +1819,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1854,7 +1854,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1889,7 +1889,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1924,7 +1924,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1959,7 +1959,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -1994,7 +1994,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -2029,7 +2029,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 42161
@@ -2064,7 +2064,7 @@ buckets:
     from_token: USDC
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2099,7 +2099,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2134,7 +2134,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2169,7 +2169,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2204,7 +2204,7 @@ buckets:
     from_token: USDT
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2239,7 +2239,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2274,7 +2274,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2309,7 +2309,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2344,7 +2344,7 @@ buckets:
     from_token: ETH
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 10
@@ -2379,7 +2379,7 @@ buckets:
     from_token: USDC
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2414,7 +2414,7 @@ buckets:
     from_token: USDC
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2449,7 +2449,7 @@ buckets:
     from_token: USDT
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2484,7 +2484,7 @@ buckets:
     from_token: USDT
     to_token: ETH
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2519,7 +2519,7 @@ buckets:
     from_token: ETH
     to_token: USDC
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2554,7 +2554,7 @@ buckets:
     from_token: ETH
     to_token: USDT
     is_smart_contract_deposit_supported: false
-    token_amount_from_usd: 1
+    token_amount_from_usd: 3
     token_amount_to_usd: 10
   - from_chain_id: 8453
     to_chain_id: 8453
@@ -2584,7 +2584,6 @@ buckets:
     is_smart_contract_deposit_supported: false
     token_amount_from_usd: 10000
     token_amount_to_usd: 100000
-
 bungee:
   base_url: https://api.socket.tech/v2
 covalent:

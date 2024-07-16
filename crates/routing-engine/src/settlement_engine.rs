@@ -12,7 +12,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use config::Config;
+use config::{Config, TokenAddress};
 
 use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
@@ -25,7 +25,7 @@ pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvid
     config: Arc<Config>,
     price_provider: Arc<Mutex<PriceProvider>>,
     // (chain_id, token_address) -> contract
-    erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
+    erc20_instance_map: HashMap<(u32, TokenAddress), blockchain::ERC20Contract>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -49,7 +49,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
         config: Arc<Config>,
         source: Source,
         price_provider: Arc<Mutex<PriceProvider>>,
-        erc20_instance_map: HashMap<(u32, String), blockchain::ERC20Contract>,
+        erc20_instance_map: HashMap<(u32, TokenAddress), blockchain::ERC20Contract>,
     ) -> Self {
         SettlementEngine { source, config, price_provider, erc20_instance_map }
     }
@@ -219,7 +219,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
 
         // Group the approvals and combine them based on chain_id, token_address, spender and target
         let mut approvals_grouped =
-            HashMap::<(u32, &String, &String, &String), Vec<&RequiredApprovalDetails>>::new();
+            HashMap::<(u32, &TokenAddress, &String, &String), Vec<&RequiredApprovalDetails>>::new();
         for approval in approvals {
             let key =
                 (approval.chain_id, &approval.token_address, &approval.owner, &approval.target);
@@ -309,7 +309,7 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
     NoTransactionsGenerated,
 
     #[error("ERC20 Utils not found for chain_id: {0} and token_address: {1}")]
-    ERC20UtilsNotFound(u32, String),
+    ERC20UtilsNotFound(u32, TokenAddress),
 
     #[error("Error parsing address: {0}")]
     InvalidAddressError(FromHexError),
@@ -320,8 +320,10 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
 
 pub fn generate_erc20_instance_map(
     config: &Config,
-) -> Result<HashMap<(u32, String), blockchain::ERC20Contract>, Vec<GenerateERC20InstanceMapErrors>>
-{
+) -> Result<
+    HashMap<(u32, TokenAddress), blockchain::ERC20Contract>,
+    Vec<GenerateERC20InstanceMapErrors>,
+> {
     let (result, failed): (Vec<_>, _) = config
         .tokens
         .iter()
@@ -331,7 +333,10 @@ pub fn generate_erc20_instance_map(
                 .iter()
                 .map(
                     |(chain_id, chain_specific_config)| -> Result<
-                        ((u32, String), IERC20Instance<Http<Client>, RootProvider<Http<Client>>>),
+                        (
+                            (u32, TokenAddress),
+                            IERC20Instance<Http<Client>, RootProvider<Http<Client>>>,
+                        ),
                         GenerateERC20InstanceMapErrors,
                     > {
                         let rpc_url = &config
@@ -347,15 +352,17 @@ pub fn generate_erc20_instance_map(
                                 |_| GenerateERC20InstanceMapErrors::InvalidRPCUrl(rpc_url.clone()),
                             )?);
 
-                        let token_address =
-                            chain_specific_config.address.clone().parse().map_err(|err| {
+                        let token_address = chain_specific_config.address.clone();
+
+                        let token = blockchain::ERC20Contract::new(
+                            token_address.to_string().parse().map_err(|err| {
                                 GenerateERC20InstanceMapErrors::InvalidAddressError(
-                                    chain_specific_config.address.clone(),
+                                    token_address.clone().to_string(),
                                     err,
                                 )
-                            })?;
-
-                        let token = blockchain::ERC20Contract::new(token_address, provider);
+                            })?,
+                            provider,
+                        );
 
                         Ok(((*chain_id, chain_specific_config.address.clone()), token))
                     },
@@ -491,7 +498,7 @@ mod tests {
 
         let required_approval_data = RequiredApprovalDetails {
             chain_id: 42161,
-            token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+            token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
             owner: TEST_OWNER_WALLET.to_string(),
             target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
             amount: U256::from(100),
@@ -531,7 +538,7 @@ mod tests {
 
         let required_approval_data = RequiredApprovalDetails {
             chain_id: 42161,
-            token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+            token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
             owner: TEST_OWNER_WALLET.to_string(),
             target: TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
             amount: U256::from(150),
@@ -572,14 +579,14 @@ mod tests {
         let required_approval_datas = vec![
             RequiredApprovalDetails {
                 chain_id: 42161,
-                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
                 owner: TEST_OWNER_WALLET.to_string(),
                 target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
                 amount: U256::from(100),
             },
             RequiredApprovalDetails {
                 chain_id: 42161,
-                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
                 owner: TEST_OWNER_WALLET.to_string(),
                 target: TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
                 amount: U256::from(150),
@@ -646,14 +653,14 @@ mod tests {
         let required_approval_datas = vec![
             RequiredApprovalDetails {
                 chain_id: 42161,
-                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
                 owner: TEST_OWNER_WALLET.to_string(),
                 target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
                 amount: U256::from(100),
             },
             RequiredApprovalDetails {
                 chain_id: 42161,
-                token_address: TOKEN_ADDRESS_USDC_42161.to_string(),
+                token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
                 owner: TEST_OWNER_WALLET.to_string(),
                 target: TARGET_NO_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
                 amount: U256::from(150),
@@ -695,12 +702,12 @@ mod tests {
 
         let bridge_result = BridgeResult::build(
             &config,
-            &1,
             &42161,
+            &10,
             &"USDC".to_string(),
             &"USDC".to_string(),
             false,
-            100.0,
+            1000.0,
             TEST_OWNER_WALLET.to_string(),
             TEST_OWNER_WALLET.to_string(),
         )
@@ -723,12 +730,12 @@ mod tests {
 
         let bridge_result = BridgeResult::build(
             &config,
-            &1,
-            &1,
+            &42161,
+            &10,
             &"USDC".to_string(),
             &"USDT".to_string(),
             false,
-            100.0,
+            1000.0,
             TEST_OWNER_WALLET.to_string(),
             TEST_OWNER_WALLET.to_string(),
         )

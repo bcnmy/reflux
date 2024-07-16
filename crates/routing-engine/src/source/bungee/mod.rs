@@ -126,6 +126,9 @@ pub enum GenerateRouteTransactionsError {
 
     #[error("Error while parsing U256: {0}")]
     InvalidU256Error(String),
+
+    #[error("Error while parsing Address: {0}")]
+    InvalidAddressError(String),
 }
 
 #[async_trait]
@@ -170,9 +173,9 @@ impl RouteSource for BungeeClient {
 
         let request = GetQuoteRequest {
             from_chain_id: route.from_chain.id,
-            from_token_address: from_token.address.clone(),
+            from_token_address: from_token.address.to_string(),
             to_chain_id: route.to_chain.id,
-            to_token_address: to_token.address.clone(),
+            to_token_address: to_token.address.to_string(),
             from_amount: from_token_amount.to_string(),
             user_address: sender_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
             recipient: recipient_address.unwrap_or(&ADDRESS_ZERO.to_string()).clone(),
@@ -292,7 +295,10 @@ impl RouteSource for BungeeClient {
         let approvals = match tx.approval_data {
             Some(approval_data) => vec![RequiredApprovalDetails {
                 chain_id: tx.chain_id,
-                token_address: approval_data.approval_token_address,
+                token_address: approval_data
+                    .approval_token_address
+                    .try_into()
+                    .map_err(GenerateRouteTransactionsError::InvalidAddressError)?,
                 owner: approval_data.owner,
                 target: approval_data.allowance_target,
                 amount: Uint::from_str(&approval_data.minimum_approval_amount).map_err(|err| {
@@ -365,7 +371,7 @@ mod tests {
         let (config, client) = setup();
 
         let route =
-            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+            Route::build(&config, &10, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
                 .unwrap();
         let (_, least_route_cost) = client
             .fetch_least_cost_route_and_cost_in_usd(
@@ -386,7 +392,7 @@ mod tests {
         let (config, client) = setup();
 
         let route =
-            Route::build(&config, &1, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
+            Route::build(&config, &10, &42161, &"USDC".to_string(), &"USDC".to_string(), false)
                 .unwrap();
 
         let address = "0x90f05C1E52FAfB4577A4f5F869b804318d56A1ee".to_string();

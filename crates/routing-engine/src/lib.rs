@@ -5,8 +5,8 @@ pub use alloy::transports::Transport;
 use derive_more::Display;
 use thiserror::Error;
 
-use config::{ChainConfig, TokenConfig};
 use config::config::{BucketConfig, Config};
+use config::{ChainConfig, TokenConfig};
 pub use indexer::Indexer;
 pub use source::bungee::BungeeClient;
 pub use token_price::CoingeckoClient;
@@ -178,7 +178,7 @@ mod test {
         let config = get_sample_config();
         let route = super::Route::build(
             &config,
-            &1,
+            &10,
             &42161,
             &"USDC".to_string(),
             &"USDT".to_string(),
@@ -194,7 +194,7 @@ mod test {
         let config = get_sample_config();
         let bridge_result = super::BridgeResult::build(
             &config,
-            &1,
+            &10,
             &42161,
             &"USDC".to_string(),
             &"USDT".to_string(),

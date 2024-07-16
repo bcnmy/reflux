@@ -103,7 +103,7 @@ mod tests {
         let token_price_provider = Arc::new(Mutex::new(TokenPriceProviderStub {}));
 
         let token_symbol = String::from("USDC");
-        let chain_id = 1;
+        let chain_id = 10;
         let value_in_usd = 10.0;
 
         let result = super::get_token_amount_from_value_in_usd(

@@ -5,6 +5,8 @@ use async_trait::async_trait;
 use ruint::aliases::U256;
 use serde::Serialize;
 
+use config::TokenAddress;
+
 use crate::{CostType, Route};
 
 pub mod bungee;
@@ -21,7 +23,7 @@ pub struct EthereumTransaction {
 #[derive(Debug, Clone)]
 pub struct RequiredApprovalDetails {
     pub chain_id: u32,
-    pub token_address: String,
+    pub token_address: TokenAddress,
     pub owner: String,
     pub target: String,
     pub amount: U256,
