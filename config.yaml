@@ -22,15 +22,15 @@ tokens:
       "42161":
         is_enabled: true
         decimals: 6
-        address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+        address: "0xaf88d065e77c8cc2239327c5edb3a432268e5831"
       "10":
         is_enabled: true
         decimals: 6
-        address: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
+        address: "0x7f5c764cbc14f9669b88837ca1490cca17c31607"
       "8453":
         is_enabled: true
         decimals: 6
-        address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   - symbol: USDT
     is_enabled: true
     coingecko_symbol: tether
@@ -42,11 +42,11 @@ tokens:
       "10":
         is_enabled: true
         decimals: 6
-        address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58"
+        address: "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58"
       "8453":
         is_enabled: true
         decimals: 6
-        address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"
+        address: "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
   - symbol: ETH
     is_enabled: true
     coingecko_symbol: ethereum
