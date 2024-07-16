@@ -1,11 +1,14 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::Method;
 use clap::Parser;
 use dotenv::dotenv;
+use futures_util::future::join_all;
 use log::{debug, error, info};
+use tokio::join;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -19,6 +22,10 @@ use routing_engine::settlement_engine::{generate_erc20_instance_map, SettlementE
 use storage::{ControlFlow, MessageQueue, RedisClient};
 use storage::mongodb_client::MongoDBClient;
 
+use crate::utils::find_lowest_transfer_amount_usd;
+
+mod utils;
+
 #[derive(Parser, Debug)]
 struct Args {
     /// Run the Solver (default)
@@ -28,6 +35,10 @@ struct Args {
     /// Run the Indexer
     #[arg(short, long)]
     indexer: bool,
+
+    /// Run the utility to find the lowest transfer amount in USD for all possible token pairs
+    #[arg(short, long)]
+    find_lowest_transfer_amounts_usd: bool,
 
     /// Config file path
     #[arg(short, long, default_value = "config.yaml")]
@@ -48,11 +59,6 @@ async fn main() {
         panic!("Cannot run both indexer and solver at the same time");
     }
 
-    if !args.indexer && !args.solver {
-        args.solver = true;
-        debug!("Running Solver by default");
-    }
-
     // Load configuration from yaml
     let config =
         Arc::new(Config::build_from_file(&args.config).expect("Failed to load config file"));
@@ -60,6 +66,11 @@ async fn main() {
     if args.indexer {
         run_indexer(config).await;
     } else if args.solver {
+        run_solver(config).await;
+    } else if args.find_lowest_transfer_amounts_usd {
+        run_find_lowest_transfer_amount_usd(config).await;
+    } else {
+        info!("Running Solver by default");
         run_solver(config).await;
     }
 }
@@ -228,4 +239,66 @@ async fn run_indexer(config: Arc<Config>) {
         Ok(_) => info!("Indexer Job Completed"),
         Err(e) => error!("Indexer Job Failed: {}", e),
     };
+}
+
+async fn run_find_lowest_transfer_amount_usd(config: Arc<Config>) {
+    let redis_client = RedisClient::build(&config.infra.redis_url).await.unwrap();
+    let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
+        .expect("Failed to Instantiate Bungee Client");
+    let token_price_provider = Arc::new(Mutex::new(CoingeckoClient::new(
+        config.coingecko.base_url.clone(),
+        config.coingecko.api_key.clone(),
+        redis_client.clone(),
+        Duration::from_secs(config.coingecko.expiry_sec),
+    )));
+
+    let mut results = Vec::new();
+
+    // Intentionally not running these concurrently to avoid rate limiting
+    for (_, token_a) in config.tokens.iter() {
+        for (chain_a, _) in token_a.by_chain.iter() {
+            for (_, token_b) in config.tokens.iter() {
+                for (chain_b, _) in token_b.by_chain.iter() {
+                    if token_a.symbol != token_b.symbol || chain_a != chain_b {
+                        results.push((
+                            (
+                                *chain_a,
+                                *chain_b,
+                                token_a.symbol.clone(),
+                                token_b.symbol.clone(),
+                                false,
+                            ),
+                            find_lowest_transfer_amount_usd(
+                                &config,
+                                *chain_a,
+                                *chain_b,
+                                &token_a.symbol,
+                                &token_b.symbol,
+                                false,
+                                &bungee_client,
+                                Arc::clone(&token_price_provider),
+                            )
+                            .await,
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    for result in results {
+        let (route, amount_result) = result;
+
+        match amount_result {
+            Ok(amount) => {
+                info!(
+                    "Found lowest transfer amount in USD for token {} on chain {} to token {} on chain {}: {}",
+                    route.2, route.0, route.3, route.1, amount
+                );
+            }
+            Err(e) => {
+                error!("Failed to find lowest transfer amount in USD: {}", e);
+            }
+        }
+    }
 }
