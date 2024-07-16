@@ -6,9 +6,7 @@ use std::time::Duration;
 use axum::http::Method;
 use clap::Parser;
 use dotenv::dotenv;
-use futures_util::future::join_all;
 use log::{debug, error, info};
-use tokio::join;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -52,7 +50,7 @@ async fn main() {
     }
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
-    let mut args = Args::parse();
+    let args = Args::parse();
     debug!("Args: {:?}", args);
 
     if args.indexer && args.solver {
@@ -176,6 +174,9 @@ async fn run_solver(config: Arc<Config>) {
             (token.clone(), chain_supported)
         })
         .collect();
+
+    // run the cache refresh once at the start
+    routing_engine.refresh_cache().await;
 
     // API service controller
     let chain_supported: Vec<(u32, String)> =
