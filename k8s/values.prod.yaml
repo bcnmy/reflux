@@ -85,6 +85,14 @@ secret:
       name: ARBITRUM_RPC_URL
       version: latest
       property: ARBITRUM_RPC_URL
+    OPTIMISM_RPC_URL:
+      name: OPTIMISM_RPC_URL
+      version: latest
+      property: OPTIMISM_RPC_URL
+    BASE_RPC_URL:
+      name: BASE_RPC_URL
+      version: latest
+      property: BASE_RPC_URL
 
 config:
   chains:
