@@ -144,10 +144,10 @@ mod tests {
 
     use async_trait::async_trait;
     use derive_more::Display;
+    use serial_test::serial;
     use thiserror::Error;
 
     use config::{Config, get_sample_config};
-    use serial_test::serial;
     use storage::{KeyValueStore, RedisClientError};
 
     use crate::CoingeckoClient;
@@ -192,7 +192,10 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+        async fn get_all_key_values(
+            &self,
+            _: Option<usize>,
+        ) -> Result<HashMap<String, String>, RedisClientError> {
             unimplemented!()
         }
     }

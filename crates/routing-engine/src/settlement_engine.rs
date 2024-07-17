@@ -488,7 +488,10 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+        async fn get_all_key_values(
+            &self,
+            _: Option<usize>,
+        ) -> Result<HashMap<String, String>, RedisClientError> {
             unimplemented!()
         }
     }

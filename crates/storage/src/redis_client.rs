@@ -176,7 +176,7 @@ mod tests {
             .unwrap();
 
         // Fetch all key-values
-        let key_values = client.get_all_key_values().await.unwrap();
+        let key_values = client.get_all_key_values(None).await.unwrap();
 
         assert_eq!(key_values.get("key1").unwrap(), "value1");
         assert_eq!(key_values.get("key2").unwrap(), "value2");
