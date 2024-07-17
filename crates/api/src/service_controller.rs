@@ -12,7 +12,7 @@ use routing_engine::token_price::TokenPriceProvider;
 
 pub struct ServiceController<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     account_service: Arc<AccountAggregationService>,
-    routing_engine: Arc<RoutingEngine>,
+    routing_engine: Arc<RoutingEngine<PriceProvider>>,
     settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
     token_chain_map: HashMap<String, HashMap<u32, bool>>,
     chain_supported: Vec<(u32, String)>,
@@ -24,7 +24,7 @@ impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
 {
     pub fn new(
         account_service: Arc<AccountAggregationService>,
-        routing_engine: Arc<RoutingEngine>,
+        routing_engine: Arc<RoutingEngine<PriceProvider>>,
         settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
         token_chain_map: HashMap<String, HashMap<u32, bool>>,
         chain_supported: Vec<(u32, String)>,
@@ -214,7 +214,7 @@ impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
 
     /// Get best cost path for asset consolidation
     pub async fn get_best_path(
-        routing_engine: Arc<RoutingEngine>,
+        routing_engine: Arc<RoutingEngine<PriceProvider>>,
         settlement_engine: Arc<SettlementEngine<Source, PriceProvider>>,
         token_chain_map: HashMap<String, HashMap<u32, bool>>,
         query: types::PathQuery,
@@ -240,7 +240,12 @@ impl<Source: RouteSource + 'static, PriceProvider: TokenPriceProvider + 'static>
         }
 
         let routes_result = routing_engine
-            .get_best_cost_paths(&query.account, query.to_chain, &query.to_token, query.to_value)
+            .get_best_cost_paths(
+                &query.account,
+                query.to_chain,
+                &query.to_token,
+                query.to_amount_token,
+            )
             .await;
 
         if let Err(err) = routes_result {

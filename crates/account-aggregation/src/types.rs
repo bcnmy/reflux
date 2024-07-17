@@ -79,5 +79,5 @@ pub struct PathQuery {
     pub account: String,
     pub to_chain: u32,
     pub to_token: String,
-    pub to_value: f64,
+    pub to_amount_token: f64,
 }
