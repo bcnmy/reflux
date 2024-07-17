@@ -2,22 +2,21 @@ use std::cmp;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use alloy::dyn_abi::abi::Token;
 use futures::stream::{self, StreamExt};
 use log::{debug, error, info};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
 use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
-use config::{ChainConfig, Config, config::BucketConfig, SolverConfig, TokenConfig};
+use config::{config::BucketConfig, ChainConfig, Config, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
-use crate::{
-    BridgeResult,
-    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
-};
+use crate::token_price::utils::{get_token_price, Errors};
 use crate::token_price::TokenPriceProvider;
-use crate::token_price::utils::{Errors, get_token_price};
+use crate::{
+    estimator::{Estimator, LinearRegressionEstimator},
+    BridgeResult, BridgeResultVecWrapper, Route,
+};
 
 const FETCH_REDIS_KEYS_BATCH_SIZE: usize = 50;
 
@@ -241,6 +240,7 @@ impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
                 to_chain,
                 &balance.token,
                 to_token,
+                balance.amount,
                 amount_to_take,
                 false,
                 &balance.address,
@@ -321,6 +321,7 @@ impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
         to_chain_id: u32,
         from_token_id: &str,
         to_token_id: &str,
+        token_amount: f64,
         token_amount_in_usd: f64,
         is_smart_contract_deposit: bool,
         from_address: &str,
@@ -344,6 +345,7 @@ impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
 
         Ok(BridgeResult {
             route: Route { from_chain, to_chain, from_token, to_token, is_smart_contract_deposit },
+            source_amount: token_amount,
             source_amount_in_usd: token_amount_in_usd,
             from_address: from_address.to_string(),
             to_address: to_address.to_string(),
@@ -366,20 +368,20 @@ mod tests {
 
     use account_aggregation::service::AccountAggregationService;
     use config::{
-        BucketConfig, ChainConfig, get_sample_config, SolverConfig, TokenConfig,
+        get_sample_config, BucketConfig, ChainConfig, SolverConfig, TokenConfig,
         TokenConfigByChainConfigs,
     };
-    use storage::{KeyValueStore, RedisClientError};
     use storage::mongodb_client::MongoDBClient;
+    use storage::{KeyValueStore, RedisClientError};
 
-    use crate::{
-        CoingeckoClient,
-        estimator::{DataPoint, LinearRegressionEstimator},
-        routing_engine::{RoutingEngine, RoutingEngineError},
-    };
     use crate::estimator::Estimator;
     use crate::routing_engine::PathQuery;
     use crate::token_price::TokenPriceProvider;
+    use crate::{
+        estimator::{DataPoint, LinearRegressionEstimator},
+        routing_engine::{RoutingEngine, RoutingEngineError},
+        CoingeckoClient,
+    };
 
     #[derive(Error, Debug, Display)]
     struct Err;
