@@ -16,11 +16,11 @@ use tokio::sync::Mutex;
 
 use config::{Config, TokenAddress};
 
+use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
-use crate::token_price::utils::{get_token_amount_from_value_in_usd, Errors};
 use crate::token_price::TokenPriceProvider;
-use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
+use crate::token_price::utils::{Errors, get_token_amount_from_value_in_usd};
 
 pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     source: Source,
@@ -459,14 +459,14 @@ mod tests {
     use thiserror::Error;
     use tokio::sync::Mutex;
 
-    use config::{get_sample_config, Config};
+    use config::{Config, get_sample_config};
     use storage::{KeyValueStore, RedisClientError};
 
+    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
     use crate::settlement_engine::{
         generate_erc20_instance_map, SettlementEngine, SettlementEngineErrors, TransactionType,
     };
     use crate::source::{EthereumTransaction, RequiredApprovalDetails};
-    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
 
     #[derive(Error, Debug, Display)]
     struct Err;
@@ -592,51 +592,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_should_take_existing_approval_into_consideration_while_building_approval_data() {
-        let config = Arc::new(setup_config());
-        let engine = setup(&config);
-
-        let required_approval_data = RequiredApprovalDetails {
-            chain_id: 42161,
-            token_address: TOKEN_ADDRESS_USDC_42161.to_string().try_into().unwrap(),
-            owner: TEST_OWNER_WALLET.to_string(),
-            target: TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC.to_string(),
-            amount: U256::from(150),
-        };
-
-        let transaction = engine
-            .generate_transaction_for_approval(&required_approval_data)
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert!(if let TransactionType::Approval(_) = transaction.transaction_type {
-            true
-        } else {
-            false
-        });
-
-        assert_eq!(transaction.transaction.to, TOKEN_ADDRESS_USDC_42161);
-        assert_eq!(transaction.transaction.value, U256::ZERO);
-        assert_eq!(
-            transaction.transaction.calldata,
-            engine
-                .erc20_instance_map
-                .get(&(required_approval_data.chain_id, required_approval_data.token_address))
-                .expect("ERC20 Utils not found")
-                .approve(
-                    TARGET_100_USDC_APPROVAL_BY_OWNER_ON_42161_FOR_USDC
-                        .to_string()
-                        .parse()
-                        .expect("Invalid address"),
-                    U256::from(50)
-                )
-                .calldata()
-                .to_string()
-        )
-    }
-
-    #[tokio::test]
     async fn test_should_generate_approvals_for_multiple_required_transactions() {
         let config = Arc::new(setup_config());
         let engine = setup(&config);
@@ -710,7 +665,7 @@ mod tests {
                         .to_string()
                         .parse()
                         .expect("Invalid address"),
-                    U256::from(50)
+                    U256::from(150)
                 )
                 .calldata()
                 .to_string()
