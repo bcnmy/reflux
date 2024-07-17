@@ -16,11 +16,11 @@ use tokio::sync::Mutex;
 
 use config::{Config, TokenAddress};
 
-use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
+use crate::token_price::utils::{get_token_amount_from_value_in_usd, Errors};
 use crate::token_price::TokenPriceProvider;
-use crate::token_price::utils::{Errors, get_token_amount_from_value_in_usd};
+use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 
 pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     source: Source,
@@ -459,14 +459,14 @@ mod tests {
     use thiserror::Error;
     use tokio::sync::Mutex;
 
-    use config::{Config, get_sample_config};
+    use config::{get_sample_config, Config};
     use storage::{KeyValueStore, RedisClientError};
 
-    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
     use crate::settlement_engine::{
         generate_erc20_instance_map, SettlementEngine, SettlementEngineErrors, TransactionType,
     };
     use crate::source::{EthereumTransaction, RequiredApprovalDetails};
+    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
 
     #[derive(Error, Debug, Display)]
     struct Err;
@@ -507,7 +507,10 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+        async fn get_all_key_values(
+            &self,
+            _: Option<usize>,
+        ) -> Result<HashMap<String, String>, RedisClientError> {
             unimplemented!()
         }
     }
