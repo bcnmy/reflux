@@ -2,26 +2,29 @@ use std::cmp;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use alloy::dyn_abi::abi::Token;
 use futures::stream::{self, StreamExt};
 use log::{debug, error, info};
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use account_aggregation::{service::AccountAggregationService, types::TokenWithBalance};
-use config::{config::BucketConfig, ChainConfig, Config, SolverConfig, TokenConfig};
+use config::{ChainConfig, Config, config::BucketConfig, SolverConfig, TokenConfig};
 use storage::{KeyValueStore, RedisClient, RedisClientError};
 
 use crate::{
-    estimator::{Estimator, LinearRegressionEstimator},
-    BridgeResult, BridgeResultVecWrapper, Route,
+    BridgeResult,
+    BridgeResultVecWrapper, estimator::{Estimator, LinearRegressionEstimator}, Route,
 };
+use crate::token_price::TokenPriceProvider;
+use crate::token_price::utils::{Errors, get_token_price};
 
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
 struct PathQuery(u32, u32, String, String);
 
 #[derive(Error, Debug)]
-pub enum RoutingEngineError {
+pub enum RoutingEngineError<T: TokenPriceProvider> {
     #[error("Redis error: {0}")]
     RedisError(#[from] RedisClientError),
 
@@ -36,12 +39,15 @@ pub enum RoutingEngineError {
 
     #[error("User balance fetch error: {0}")]
     UserBalanceFetchError(String),
+
+    #[error("Token price provider error: {0}")]
+    TokenPriceProviderError(Errors<T::Error>),
 }
 
 /// Routing Engine
 /// This struct is responsible for calculating the best cost path for a user
 #[derive(Debug)]
-pub struct RoutingEngine {
+pub struct RoutingEngine<T: TokenPriceProvider> {
     buckets: Vec<Arc<BucketConfig>>,
     aas_client: Arc<AccountAggregationService>,
     cache: Arc<RwLock<HashMap<String, String>>>, // (hash(bucket), hash(estimator_value)
@@ -49,9 +55,11 @@ pub struct RoutingEngine {
     estimates: Arc<SolverConfig>,
     chain_configs: HashMap<u32, Arc<ChainConfig>>,
     token_configs: HashMap<String, Arc<TokenConfig>>,
+    config: Arc<Config>,
+    price_provider: Arc<Mutex<T>>,
 }
 
-impl RoutingEngine {
+impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
     pub fn new(
         aas_client: Arc<AccountAggregationService>,
         buckets: Vec<Arc<BucketConfig>>,
@@ -59,6 +67,8 @@ impl RoutingEngine {
         solver_config: Arc<SolverConfig>,
         chain_configs: HashMap<u32, Arc<ChainConfig>>,
         token_configs: HashMap<String, Arc<TokenConfig>>,
+        config: Arc<Config>,
+        price_provider: Arc<Mutex<PriceProvider>>,
     ) -> Self {
         let cache = Arc::new(RwLock::new(HashMap::new()));
 
@@ -70,6 +80,8 @@ impl RoutingEngine {
             estimates: solver_config,
             chain_configs,
             token_configs,
+            config,
+            price_provider,
         }
     }
 
@@ -99,11 +111,11 @@ impl RoutingEngine {
         account: &str,
         to_chain: u32,
         to_token: &str,
-        to_value: f64,
-    ) -> Result<Vec<BridgeResult>, RoutingEngineError> {
+        to_amount_token: f64,
+    ) -> Result<Vec<BridgeResult>, RoutingEngineError<PriceProvider>> {
         debug!(
-            "Getting best cost path for user: {}, to_chain: {}, to_token: {}, to_value: {}",
-            account, to_chain, to_token, to_value
+            "Getting best cost path for user: {}, to_chain: {}, to_token: {}, to_amount_token: {}",
+            account, to_chain, to_token, to_amount_token
         );
         let user_balances = self.get_user_balance_from_agg_service(&account).await?;
         debug!("User balances: {:?}", user_balances);
@@ -114,10 +126,15 @@ impl RoutingEngine {
         debug!("Direct assets: {:?}", direct_assets);
         debug!("Non-direct assets: {:?}", non_direct_assets);
 
-        // let to_value_usd =
+        let to_value_usd =
+            get_token_price(&self.config, &self.price_provider.lock().await, &to_token.to_string())
+                .await
+                .map_err(RoutingEngineError::TokenPriceProviderError)?
+                * to_amount_token;
+        debug!("To value in USD: {}", to_value_usd);
 
         let (mut selected_routes, total_amount_needed, mut total_cost) = self
-            .generate_optimal_routes(direct_assets, to_chain, to_token, to_value, account)
+            .generate_optimal_routes(direct_assets, to_chain, to_token, to_value_usd, account)
             .await?;
 
         // Handle swap/bridge for remaining amount if needed (non-direct assets)
@@ -152,7 +169,7 @@ impl RoutingEngine {
         to_token: &str,
         to_value_usd: f64,
         to_address: &str,
-    ) -> Result<(Vec<BridgeResult>, f64, f64), RoutingEngineError> {
+    ) -> Result<(Vec<BridgeResult>, f64, f64), RoutingEngineError<PriceProvider>> {
         // Sort direct assets by Balance^x / Fee_Cost^y, here x=2 and y=1
         let x = self.estimates.x_value;
         let y = self.estimates.y_value;
@@ -236,7 +253,7 @@ impl RoutingEngine {
         &self,
         target_amount_in_usd: f64,
         path: PathQuery,
-    ) -> Result<f64, RoutingEngineError> {
+    ) -> Result<f64, RoutingEngineError<PriceProvider>> {
         // TODO: Maintain sorted list cache in cache, binary search
         let bucket = self
             .buckets
@@ -277,7 +294,7 @@ impl RoutingEngine {
     async fn get_user_balance_from_agg_service(
         &self,
         account: &str,
-    ) -> Result<Vec<TokenWithBalance>, RoutingEngineError> {
+    ) -> Result<Vec<TokenWithBalance>, RoutingEngineError<PriceProvider>> {
         let balance = self
             .aas_client
             .get_user_accounts_balance(&account.to_string())
@@ -306,7 +323,7 @@ impl RoutingEngine {
         is_smart_contract_deposit: bool,
         from_address: &str,
         to_address: &str,
-    ) -> Result<BridgeResult, RoutingEngineError> {
+    ) -> Result<BridgeResult, RoutingEngineError<PriceProvider>> {
         let from_chain = Arc::clone(self.chain_configs.get(&from_chain_id).ok_or_else(|| {
             RoutingEngineError::CacheError(format!(
                 "Chain config not found for ID {}",
@@ -344,12 +361,12 @@ mod tests {
     use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
     use storage::mongodb_client::MongoDBClient;
 
-    use crate::estimator::Estimator;
-    use crate::routing_engine::PathQuery;
     use crate::{
         estimator::{DataPoint, LinearRegressionEstimator},
         routing_engine::{RoutingEngine, RoutingEngineError},
     };
+    use crate::estimator::Estimator;
+    use crate::routing_engine::PathQuery;
 
     #[tokio::test]
     async fn test_get_cached_data() -> Result<(), RoutingEngineError> {

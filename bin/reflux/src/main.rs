@@ -118,6 +118,15 @@ async fn run_solver(config: Arc<Config>) {
     let redis_client = RedisClient::build(&config.infra.redis_url)
         .await
         .expect("Failed to instantiate redis client");
+
+    let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
+    let token_price_provider = Arc::new(Mutex::new(CoingeckoClient::new(
+        config.coingecko.base_url.clone(),
+        config.coingecko.api_key.clone(),
+        redis_client.clone(),
+        Duration::from_secs(config.coingecko.expiry_sec),
+    )));
+
     let routing_engine = Arc::new(RoutingEngine::new(
         account_service.clone(),
         buckets,
@@ -125,18 +134,13 @@ async fn run_solver(config: Arc<Config>) {
         config.solver_config.clone(),
         chain_configs,
         token_configs,
+        Arc::clone(&config),
+        Arc::clone(&token_price_provider),
     ));
 
     // Initialize Settlement Engine and Dependencies
-    let erc20_instance_map = generate_erc20_instance_map(&config).unwrap();
     let bungee_client = BungeeClient::new(&config.bungee.base_url, &config.bungee.api_key)
         .expect("Failed to Instantiate Bungee Client");
-    let token_price_provider = Arc::new(Mutex::new(CoingeckoClient::new(
-        config.coingecko.base_url.clone(),
-        config.coingecko.api_key.clone(),
-        redis_client.clone(),
-        Duration::from_secs(config.coingecko.expiry_sec),
-    )));
     let settlement_engine = Arc::new(SettlementEngine::new(
         Arc::clone(&config),
         bungee_client,
