@@ -224,7 +224,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
             return Ok(None);
         }
 
-        let required_approval = required_approval_details.amount - current_approval;
+        let required_approval = required_approval_details.amount;
         info!(
             "Required Approval: {:?} against requirement: {:?}",
             required_approval, required_approval_details
