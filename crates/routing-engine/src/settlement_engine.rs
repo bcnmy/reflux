@@ -7,6 +7,7 @@ use alloy::transports::http::Http;
 use futures::StreamExt;
 use log::{error, info};
 use reqwest::{Client, Url};
+use ruint::aliases::U256;
 use ruint::Uint;
 use serde::Serialize;
 use thiserror::Error;
@@ -14,7 +15,7 @@ use tokio::sync::Mutex;
 
 use config::{Config, TokenAddress};
 
-use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
+use crate::{blockchain, BridgeResult, BridgeResultVecWrapper, Route};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
 use crate::token_price::TokenPriceProvider;
@@ -30,8 +31,25 @@ pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvid
 
 #[derive(Debug, PartialEq, Serialize)]
 pub enum TransactionType {
-    Approval,
-    Bungee,
+    Approval(ApprovalDetails),
+    Bungee(BungeeDetails),
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct BungeeDetails {
+    pub from_chain: u32,
+    pub to_chain: u32,
+    pub from_address: String,
+    pub to_address: String,
+    pub token: String,
+    pub token_amount: U256,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+pub struct ApprovalDetails {
+    pub chain: u32,
+    pub token: String,
+    pub token_amount: U256,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,7 +81,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
         let (results, failed): (
             Vec<
                 Result<
-                    (Vec<EthereumTransaction>, Vec<RequiredApprovalDetails>),
+                    (Vec<(BungeeDetails, EthereumTransaction)>, Vec<RequiredApprovalDetails>),
                     SettlementEngineErrors<Source, PriceProvider>,
                 >,
             >,
@@ -98,7 +116,22 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                 info!("Generated transactions: {:?} for route {}", ethereum_transactions, route);
 
                 Ok::<_, SettlementEngineErrors<_, _>>((
-                    ethereum_transactions,
+                    ethereum_transactions
+                        .into_iter()
+                        .map(|t| {
+                            (
+                                BungeeDetails {
+                                    from_chain: route.route.from_chain.id,
+                                    to_chain: route.route.to_chain.id,
+                                    from_address: route.from_address.clone(),
+                                    to_address: route.to_address.clone(),
+                                    token: route.route.from_token.symbol.clone(),
+                                    token_amount: token_amount.clone(),
+                                },
+                                t,
+                            )
+                        })
+                        .collect(),
                     required_approval_details,
                 ))
             })
@@ -125,9 +158,9 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
         let bridge_transactions: Vec<_> = bridge_transactions
             .into_iter()
             .flatten()
-            .map(|t| TransactionWithType {
+            .map(|(details, t)| TransactionWithType {
                 transaction: t,
-                transaction_type: TransactionType::Bungee,
+                transaction_type: TransactionType::Bungee(details),
             })
             .collect();
 
@@ -207,7 +240,11 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                 value: Uint::ZERO,
                 calldata,
             },
-            transaction_type: TransactionType::Approval,
+            transaction_type: TransactionType::Approval(ApprovalDetails {
+                chain: required_approval_details.chain_id,
+                token: required_approval_details.token_address.to_string(),
+                token_amount: required_approval,
+            }),
         }))
     }
 
@@ -510,7 +547,11 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(transaction.transaction_type, TransactionType::Approval);
+        assert!(if let TransactionType::Approval(_) = transaction.transaction_type {
+            true
+        } else {
+            false
+        });
         assert_eq!(transaction.transaction.to, TOKEN_ADDRESS_USDC_42161);
         assert_eq!(transaction.transaction.value, U256::ZERO);
         assert_eq!(
@@ -550,7 +591,12 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(transaction.transaction_type, TransactionType::Approval);
+        assert!(if let TransactionType::Approval(_) = transaction.transaction_type {
+            true
+        } else {
+            false
+        });
+
         assert_eq!(transaction.transaction.to, TOKEN_ADDRESS_USDC_42161);
         assert_eq!(transaction.transaction.value, U256::ZERO);
         assert_eq!(
@@ -597,7 +643,11 @@ mod tests {
             engine.generate_transactions_for_approvals(&required_approval_datas).await.unwrap();
         transactions.sort_by(|a, b| a.transaction.calldata.cmp(&b.transaction.calldata));
 
-        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert!(if let TransactionType::Approval(_) = transactions[0].transaction_type {
+            true
+        } else {
+            false
+        });
         assert_eq!(transactions[0].transaction.to, TOKEN_ADDRESS_USDC_42161);
         assert_eq!(transactions[0].transaction.value, U256::ZERO);
         assert_eq!(
@@ -620,7 +670,11 @@ mod tests {
                 .to_string()
         );
 
-        assert_eq!(transactions[1].transaction_type, TransactionType::Approval);
+        assert!(if let TransactionType::Approval(_) = transactions[1].transaction_type {
+            true
+        } else {
+            false
+        });
         assert_eq!(transactions[1].transaction.to, TOKEN_ADDRESS_USDC_42161);
         assert_eq!(transactions[1].transaction.value, U256::ZERO);
         assert_eq!(
@@ -671,7 +725,11 @@ mod tests {
             engine.generate_transactions_for_approvals(&required_approval_datas).await.unwrap();
 
         assert_eq!(transactions.len(), 1);
-        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
+        assert!(if let TransactionType::Approval(_) = transactions[0].transaction_type {
+            true
+        } else {
+            false
+        });
         assert_eq!(transactions[0].transaction.to, TOKEN_ADDRESS_USDC_42161);
         assert_eq!(transactions[0].transaction.value, U256::ZERO);
         assert_eq!(
@@ -719,8 +777,17 @@ mod tests {
             .expect("Failed to generate transactions");
 
         assert_eq!(transactions.len(), 2);
-        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
-        assert_eq!(transactions[1].transaction_type, TransactionType::Bungee);
+
+        assert!(if let TransactionType::Approval(_) = transactions[0].transaction_type {
+            true
+        } else {
+            false
+        });
+        assert!(if let TransactionType::Bungee(_) = transactions[1].transaction_type {
+            true
+        } else {
+            false
+        });
     }
 
     #[tokio::test]
@@ -747,8 +814,16 @@ mod tests {
             .expect("Failed to generate transactions");
 
         assert_eq!(transactions.len(), 2);
-        assert_eq!(transactions[0].transaction_type, TransactionType::Approval);
-        assert_eq!(transactions[1].transaction_type, TransactionType::Bungee);
+        assert!(if let TransactionType::Approval(_) = transactions[0].transaction_type {
+            true
+        } else {
+            false
+        });
+        assert!(if let TransactionType::Bungee(_) = transactions[1].transaction_type {
+            true
+        } else {
+            false
+        });
     }
 
     fn assert_is_send<T: Send>() {}
