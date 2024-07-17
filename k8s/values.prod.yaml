@@ -2705,7 +2705,7 @@ config:
     expiry_sec: 300
   server:
     port: 8080
-    host: "localhost"
+    host: "0.0.0.0"
   indexer_config:
     indexer_update_topic: indexer_update
     indexer_update_message: message
