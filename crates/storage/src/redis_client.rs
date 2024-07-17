@@ -58,10 +58,19 @@ impl KeyValueStore for RedisClient {
         Ok(keys)
     }
 
-    async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+    async fn get_all_key_values(
+        &self,
+        batch_size: Option<usize>,
+    ) -> Result<HashMap<String, String>, RedisClientError> {
         info!("Fetching all key-value pairs");
         let keys = self.get_all_keys().await?;
-        let values: Vec<String> = self.connection.clone().mget(&keys).await?;
+
+        let batch_size = batch_size.unwrap_or(keys.len());
+        let mut values = Vec::new();
+        for batch in keys.chunks(batch_size) {
+            values.extend(self.connection.clone().mget::<'_, _, Vec<_>>(batch).await?.into_iter());
+        }
+
         let kv_pairs = keys.into_iter().zip(values.into_iter()).collect();
         Ok(kv_pairs)
     }
@@ -167,7 +176,7 @@ mod tests {
             .unwrap();
 
         // Fetch all key-values
-        let key_values = client.get_all_key_values().await.unwrap();
+        let key_values = client.get_all_key_values(None).await.unwrap();
 
         assert_eq!(key_values.get("key1").unwrap(), "value1");
         assert_eq!(key_values.get("key2").unwrap(), "value2");
