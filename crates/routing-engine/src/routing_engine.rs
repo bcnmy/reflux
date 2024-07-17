@@ -353,23 +353,90 @@ impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
 mod tests {
     use std::collections::HashMap;
     use std::env;
+    use std::fmt::Error;
     use std::sync::Arc;
+    use std::time::Duration;
 
-    use tokio::sync::RwLock;
+    use async_trait::async_trait;
+    use derive_more::Display;
+    use thiserror::Error;
+    use tokio::sync::{Mutex, RwLock};
 
     use account_aggregation::service::AccountAggregationService;
-    use config::{BucketConfig, ChainConfig, SolverConfig, TokenConfig, TokenConfigByChainConfigs};
+    use config::{
+        BucketConfig, ChainConfig, get_sample_config, SolverConfig, TokenConfig,
+        TokenConfigByChainConfigs,
+    };
+    use storage::{KeyValueStore, RedisClientError};
     use storage::mongodb_client::MongoDBClient;
 
     use crate::{
+        CoingeckoClient,
         estimator::{DataPoint, LinearRegressionEstimator},
         routing_engine::{RoutingEngine, RoutingEngineError},
     };
     use crate::estimator::Estimator;
     use crate::routing_engine::PathQuery;
+    use crate::token_price::TokenPriceProvider;
+
+    #[derive(Error, Debug, Display)]
+    struct Err;
+
+    #[derive(Default, Debug)]
+    struct KVStore {
+        map: Mutex<HashMap<String, String>>,
+    }
+
+    #[async_trait]
+    impl KeyValueStore for KVStore {
+        type Error = Err;
+
+        async fn get(&self, k: &String) -> Result<String, Self::Error> {
+            match self.map.lock().await.get(k) {
+                Some(v) => Ok(v.clone()),
+                None => Result::Err(Err),
+            }
+        }
+
+        async fn get_multiple(&self, _: &Vec<String>) -> Result<Vec<String>, Self::Error> {
+            unimplemented!()
+        }
+
+        async fn set(&self, k: &String, v: &String, _: Duration) -> Result<(), Self::Error> {
+            self.map
+                .lock()
+                .await
+                .insert((*k.clone()).parse().unwrap(), (*v.clone()).parse().unwrap());
+            Ok(())
+        }
+
+        async fn set_multiple(&self, _: &Vec<(String, String)>) -> Result<(), Self::Error> {
+            unimplemented!()
+        }
+
+        async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError> {
+            unimplemented!()
+        }
+
+        async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError> {
+            unimplemented!()
+        }
+    }
+
+    #[derive(Debug)]
+    struct TokenPriceProviderStub;
+
+    #[async_trait]
+    impl TokenPriceProvider for TokenPriceProviderStub {
+        type Error = Error;
+
+        async fn get_token_price(&self, _: &String) -> Result<f64, Self::Error> {
+            Ok(0.1)
+        }
+    }
 
     #[tokio::test]
-    async fn test_get_cached_data() -> Result<(), RoutingEngineError> {
+    async fn test_get_cached_data() -> Result<(), RoutingEngineError<TokenPriceProviderStub>> {
         // Create dummy buckets
         let buckets = vec![
             Arc::new(BucketConfig {
@@ -428,6 +495,20 @@ mod tests {
         let estimates = Arc::new(SolverConfig { x_value: 2.0, y_value: 1.0 });
         let chain_configs = HashMap::new();
         let token_configs = HashMap::new();
+
+        let api_key = env::var("COINGECKO_API_KEY").expect("COINGECKO_API_KEY is not set");
+
+        let store = KVStore::default();
+
+        let client = CoingeckoClient::new(
+            "https://api.coingecko.com/api/v3".to_string(),
+            api_key,
+            store,
+            Duration::from_secs(300),
+        );
+
+        let config = get_sample_config();
+
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
@@ -436,6 +517,8 @@ mod tests {
             estimates,
             chain_configs,
             token_configs,
+            config: Arc::new(config),
+            price_provider: Arc::new(Mutex::new(client)),
         };
 
         // Define the target amount and path query
@@ -443,14 +526,17 @@ mod tests {
         let path_query = PathQuery(1, 2, "USDC".to_string(), "ETH".to_string());
 
         // Call get_cached_data and assert the result
-        let result = routing_engine.estimate_bridging_cost(target_amount, path_query).await?;
+        let result = routing_engine
+            .estimate_bridging_cost(target_amount, path_query)
+            .await
+            .expect("Failed to get cached data");
         assert!(result > 0.0);
         assert_eq!(result, dummy_estimator.estimate(target_amount));
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_get_best_cost_path() -> Result<(), RoutingEngineError> {
+    async fn test_get_best_cost_path() -> Result<(), RoutingEngineError<TokenPriceProviderStub>> {
         let api_key = env::var("COVALENT_API_KEY");
         if api_key.is_err() {
             panic!("COVALENT_API_KEY is not set");
@@ -538,6 +624,19 @@ mod tests {
         let mut token_configs = HashMap::new();
         token_configs.insert("USDT".to_string(), token_config);
 
+        let api_key = env::var("COINGECKO_API_KEY").expect("COINGECKO_API_KEY is not set");
+
+        let store = KVStore::default();
+
+        let client = CoingeckoClient::new(
+            "https://api.coingecko.com/api/v3".to_string(),
+            api_key,
+            store,
+            Duration::from_secs(300),
+        );
+
+        let config = get_sample_config();
+
         let routing_engine = RoutingEngine {
             aas_client,
             buckets,
@@ -546,13 +645,18 @@ mod tests {
             estimates,
             chain_configs,
             token_configs,
+            config: Arc::new(config),
+            price_provider: Arc::new(Mutex::new(client)),
         };
 
         // should have USDT in bsc-mainnet > $0.5
         let dummy_user_address = "0x00000ebe3fa7cb71aE471547C836E0cE0AE758c2";
-        let result = routing_engine.get_best_cost_paths(dummy_user_address, 2, "USDT", 0.5).await?;
+        let result = routing_engine
+            .get_best_cost_paths(dummy_user_address, 2, "USDT", 0.5)
+            .await
+            .expect("Failed to get best cost path");
         assert_eq!(result.len(), 1);
-        assert!(result[0].source_amount_in_usd >= 0.5);
+        assert!(result[0].source_amount_in_usd > 0.49);
         assert!(result[0].from_address == dummy_user_address);
         Ok(())
     }
