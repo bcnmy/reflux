@@ -27,7 +27,10 @@ pub trait KeyValueStore: Debug + Send + Sync {
 
     async fn get_all_keys(&self) -> Result<Vec<String>, RedisClientError>;
 
-    async fn get_all_key_values(&self) -> Result<HashMap<String, String>, RedisClientError>;
+    async fn get_all_key_values(
+        &self,
+        batch_size: Option<usize>,
+    ) -> Result<HashMap<String, String>, RedisClientError>;
 }
 
 #[async_trait]

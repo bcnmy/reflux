@@ -19,6 +19,8 @@ use crate::{
 use crate::token_price::TokenPriceProvider;
 use crate::token_price::utils::{Errors, get_token_price};
 
+const FETCH_REDIS_KEYS_BATCH_SIZE: usize = 50;
+
 /// (from_chain, to_chain, from_token, to_token)
 #[derive(Debug)]
 struct PathQuery(u32, u32, String, String);
@@ -87,7 +89,7 @@ impl<PriceProvider: TokenPriceProvider> RoutingEngine<PriceProvider> {
 
     /// Refresh the cache from Redis
     pub async fn refresh_cache(&self) {
-        match self.redis_client.get_all_key_values().await {
+        match self.redis_client.get_all_key_values(Some(FETCH_REDIS_KEYS_BATCH_SIZE)).await {
             Ok(kv_pairs) => {
                 info!("Refreshing cache from Redis.");
                 let mut cache = self.cache.write().await;
