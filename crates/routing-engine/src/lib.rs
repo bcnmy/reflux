@@ -111,6 +111,7 @@ pub enum RouteError {
 #[derive(Debug)]
 pub struct BridgeResult {
     route: Route,
+    source_amount: f64,
     source_amount_in_usd: f64,
     from_address: String,
     to_address: String,
@@ -147,6 +148,7 @@ impl BridgeResult {
         from_token_id: &String,
         to_token_id: &String,
         is_smart_contract_deposit: bool,
+        source_amount: f64,
         source_amount_in_usd: f64,
         from_address: String,
         to_address: String,
@@ -160,6 +162,7 @@ impl BridgeResult {
                 to_token_id,
                 is_smart_contract_deposit,
             )?,
+            source_amount,
             source_amount_in_usd,
             from_address,
             to_address,
@@ -200,6 +203,7 @@ mod test {
             &"USDT".to_string(),
             false,
             100.0,
+            200.0,
             "0x123".to_string(),
             "0x456".to_string(),
         )
