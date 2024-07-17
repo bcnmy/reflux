@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -15,11 +16,11 @@ use tokio::sync::Mutex;
 
 use config::{Config, TokenAddress};
 
-use crate::{blockchain, BridgeResult, BridgeResultVecWrapper, Route};
 use crate::blockchain::erc20::IERC20::IERC20Instance;
 use crate::source::{EthereumTransaction, RequiredApprovalDetails, RouteSource};
+use crate::token_price::utils::{get_token_amount_from_value_in_usd, Errors};
 use crate::token_price::TokenPriceProvider;
-use crate::token_price::utils::{Errors, get_token_amount_from_value_in_usd};
+use crate::{blockchain, BridgeResult, BridgeResultVecWrapper};
 
 pub struct SettlementEngine<Source: RouteSource, PriceProvider: TokenPriceProvider> {
     source: Source,
@@ -100,13 +101,28 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                 .await
                 .map_err(|err| SettlementEngineErrors::GetTokenAmountFromValueInUsdError(err))?;
 
-                info!("Token amount: {:?} for route {}", token_amount, route);
+                let max_user_balance = &route.source_amount
+                    * f64::powi(
+                        10.0,
+                        route
+                            .route
+                            .from_token
+                            .by_chain
+                            .get(&route.route.from_chain.id)
+                            .unwrap()
+                            .decimals
+                            .into(),
+                    );
+                let max_user_balance = max_user_balance.floor().to_string().parse()?;
+                let user_balance: Uint<256, 4> = cmp::min(max_user_balance, token_amount);
+
+                info!("Token amount: {:?} for route {}", user_balance, route);
 
                 let (ethereum_transactions, required_approval_details) = self
                     .source
                     .generate_route_transactions(
                         &route.route,
-                        &token_amount,
+                        &user_balance,
                         &route.from_address,
                         &route.to_address,
                     )
@@ -126,7 +142,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
                                     from_address: route.from_address.clone(),
                                     to_address: route.to_address.clone(),
                                     token: route.route.from_token.symbol.clone(),
-                                    token_amount: token_amount.clone(),
+                                    token_amount: user_balance.clone(),
                                 },
                                 t,
                             )
@@ -224,7 +240,7 @@ impl<Source: RouteSource, PriceProvider: TokenPriceProvider>
             return Ok(None);
         }
 
-        let required_approval = required_approval_details.amount - current_approval;
+        let required_approval = required_approval_details.amount;
         info!(
             "Required Approval: {:?} against requirement: {:?}",
             required_approval, required_approval_details
@@ -353,6 +369,9 @@ pub enum SettlementEngineErrors<Source: RouteSource, PriceProvider: TokenPricePr
 
     #[error("Error while calling ERC20 Contract: {0}")]
     AlloyError(#[from] alloy::contract::Error),
+
+    #[error("Error while parsing U256: {0}")]
+    ParseError(#[from] ruint::ParseError),
 }
 
 pub fn generate_erc20_instance_map(
@@ -440,14 +459,14 @@ mod tests {
     use thiserror::Error;
     use tokio::sync::Mutex;
 
-    use config::{Config, get_sample_config};
+    use config::{get_sample_config, Config};
     use storage::{KeyValueStore, RedisClientError};
 
-    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
     use crate::settlement_engine::{
         generate_erc20_instance_map, SettlementEngine, SettlementEngineErrors, TransactionType,
     };
     use crate::source::{EthereumTransaction, RequiredApprovalDetails};
+    use crate::{BridgeResult, BungeeClient, CoingeckoClient};
 
     #[derive(Error, Debug, Display)]
     struct Err;
@@ -768,6 +787,7 @@ mod tests {
             &"USDC".to_string(),
             &"USDC".to_string(),
             false,
+            200.0,
             1000.0,
             TEST_OWNER_WALLET.to_string(),
             TEST_OWNER_WALLET.to_string(),
@@ -805,6 +825,7 @@ mod tests {
             &"USDC".to_string(),
             &"USDT".to_string(),
             false,
+            200.0,
             1000.0,
             TEST_OWNER_WALLET.to_string(),
             TEST_OWNER_WALLET.to_string(),
