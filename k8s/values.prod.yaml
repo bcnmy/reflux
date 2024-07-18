@@ -33,20 +33,20 @@ cronjob:
   schedule: "0 */5 * * *"
   restartPolicy: OnFailure
 
-# probes:
-#   healthEndpoint: /api/health
-#   liveness:
-#     initialDelaySeconds: 30
-#     periodSeconds: 10
-#     timeoutSeconds: 5
-#     successThreshold: 1
-#     failureThreshold: 3
-#   readiness:
-#     initialDelaySeconds: 30
-#     periodSeconds: 10
-#     timeoutSeconds: 5
-#     successThreshold: 1
-#     failureThreshold: 3
+probes:
+  healthEndpoint: /api/health
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
 
 datadog:
   enable: true
