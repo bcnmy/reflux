@@ -8,11 +8,16 @@ replica: 2
 
 resource:
   requests:
-    memory: 16Gi
-    cpu: 4
+    memory: "100Mi"
+    cpu: 0.1
   limits:
-    memory: 32Gi
-    cpu: 8
+    memory: "300Mi"
+    cpu: 0.3
+
+strategy:
+  rollingUpdate: 
+    maxUnavailable: 0  # Ensures at least one pod is always available
+    maxSurge: 1        # Only one pod is created at a time
 
 affinity:
   affinityTolerations:
